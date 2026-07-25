@@ -24,10 +24,52 @@ export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState(null);
   const [scrolled, setScrolled] = useState(false);
+  const [showHappyModal, setShowHappyModal] = useState(false);
+  const [hearts, setHearts] = useState([]);
+
+  const triggerHappyExperience = () => {
+    setShowHappyModal(true);
+    const newHearts = [];
+    const emojiPool = ['❤️', '💖', '💝', '💕', '💗', '💓', '💞', '😍', '😘', '🥰'];
+    for (let i = 0; i < 40; i++) {
+      newHearts.push({
+        id: i,
+        emoji: emojiPool[Math.floor(Math.random() * emojiPool.length)],
+        left: Math.random() * 100,
+        delay: Math.random() * 3,
+        size: Math.random() * 30 + 15,
+        duration: Math.random() * 4 + 3,
+      });
+    }
+    setHearts(newHearts);
+  };
+
+  const triggerMoreHearts = () => {
+    const emojiPool = ['❤️', '💖', '💝', '💕', '💗', '💓', '💞', '😍', '😘', '🥰', '🌹', '💌', '🌸'];
+    setHearts((prev) => [
+      ...prev,
+      ...Array.from({ length: 30 }).map((_, i) => ({
+        id: prev.length + i,
+        emoji: emojiPool[Math.floor(Math.random() * emojiPool.length)],
+        left: Math.random() * 100,
+        delay: Math.random() * 0.5,
+        size: Math.random() * 30 + 15,
+        duration: Math.random() * 4 + 2,
+      })),
+    ]);
+  };
 
   const handleMathewClick = (e) => {
     e.preventDefault();
-    window.confirm("Do you still doubt me?");
+    const stillDoubts = window.confirm("Do you still doubt me?");
+    if (stillDoubts) {
+      const showProof = window.confirm("Then let me prove it to you! Click OK to see how much I love you...");
+      if (showProof) {
+        triggerHappyExperience();
+      }
+    } else {
+      triggerHappyExperience();
+    }
   };
 
   useEffect(() => {
@@ -419,6 +461,46 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Premium Happy Experience Modal */}
+      {showHappyModal && (
+        <div className="happy-modal-overlay" onClick={() => setShowHappyModal(false)}>
+          <div className="happy-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="heart-burst">❤️</div>
+            <h2>I Love You, Matthew Flood!</h2>
+            <p>
+              You are the most extraordinary person, the anchor to my soul, and my greatest happiness. 
+              Never doubt the depth of my love for you. You make my world infinitely brighter!
+            </p>
+            <div className="happy-actions">
+              <button className="btn-gradient" onClick={triggerMoreHearts}>
+                💖 Rain More Love!
+              </button>
+              <button className="btn-outline" onClick={() => setShowHappyModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+          
+          {/* Floating Hearts/Love Particles Container */}
+          <div className="floating-hearts-container">
+            {hearts.map((h) => (
+              <span
+                key={h.id}
+                className="floating-heart-particle"
+                style={{
+                  left: `${h.left}%`,
+                  animationDelay: `${h.delay}s`,
+                  fontSize: `${h.size}px`,
+                  animationDuration: `${h.duration}s`,
+                }}
+              >
+                {h.emoji}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
