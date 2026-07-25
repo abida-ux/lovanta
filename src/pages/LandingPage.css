@@ -998,8 +998,100 @@
   font-size: 17px;
   color: #4A4A4A;
   line-height: 1.8;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
   font-weight: 500;
+}
+
+/* Girlfriend Image & Glow */
+.lovanta-scope .girlfriend-img-container {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 24px auto;
+  border-radius: 50%;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  box-shadow: 0 10px 25px rgba(255, 79, 135, 0.3);
+}
+
+.lovanta-scope .girlfriend-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  position: relative;
+  z-index: 2;
+}
+
+.lovanta-scope .girlfriend-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--primary);
+  filter: blur(20px);
+  opacity: 0.55;
+  z-index: 1;
+  animation: pulseGlow 2.5s infinite alternate ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(0.95); opacity: 0.45; }
+  100% { transform: scale(1.15); opacity: 0.75; }
+}
+
+/* Funny Message formatting */
+.lovanta-scope .funny-love-msg {
+  font-size: 16px !important;
+  color: #333333 !important;
+  line-height: 1.7 !important;
+  margin-bottom: 28px !important;
+}
+
+.lovanta-scope .funny-love-msg strong {
+  color: var(--primary);
+  font-size: 20px;
+  display: inline-block;
+  margin-bottom: 8px;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Dismiss and Sweet Buttons */
+.lovanta-scope .dismiss-happy-box {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid rgba(255, 79, 135, 0.1);
+  padding-top: 24px;
+}
+
+.lovanta-scope .btn-success-sweet {
+  background: linear-gradient(135deg, #FF4F87 0%, #D7263D 100%);
+  color: white;
+  border: none;
+  padding: 14px 40px;
+  border-radius: 50px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 20px rgba(255, 79, 135, 0.3);
+}
+
+.lovanta-scope .btn-success-sweet:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 10px 25px rgba(255, 79, 135, 0.45);
+}
+
+/* Runaway Button style */
+.lovanta-scope .runaway-btn {
+  position: relative;
+  z-index: 10003;
+  transition: transform 0.12s ease-out;
+  cursor: pointer;
 }
 
 .lovanta-scope .happy-actions {

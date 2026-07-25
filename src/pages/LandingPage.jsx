@@ -26,6 +26,7 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [showHappyModal, setShowHappyModal] = useState(false);
   const [hearts, setHearts] = useState([]);
+  const [doubtBtnPos, setDoubtBtnPos] = useState(null);
 
   const triggerHappyExperience = () => {
     setShowHappyModal(true);
@@ -59,17 +60,24 @@ export default function LandingPage() {
     ]);
   };
 
+  const handleDoubtHover = (e) => {
+    if (e) e.preventDefault();
+    const randomX = Math.floor(Math.random() * 260) - 130;
+    const randomY = Math.floor(Math.random() * 200) - 100;
+    setDoubtBtnPos({
+      transform: `translate(${randomX}px, ${randomY}px)`,
+      transition: 'transform 0.12s ease-out',
+    });
+  };
+
+  const closeHappyModal = () => {
+    setShowHappyModal(false);
+    setDoubtBtnPos(null);
+  };
+
   const handleMathewClick = (e) => {
     e.preventDefault();
-    const stillDoubts = window.confirm("Do you still doubt me?");
-    if (stillDoubts) {
-      const showProof = window.confirm("Then let me prove it to you! Click OK to see how much I love you...");
-      if (showProof) {
-        triggerHappyExperience();
-      }
-    } else {
-      triggerHappyExperience();
-    }
+    triggerHappyExperience();
   };
 
   useEffect(() => {
@@ -464,20 +472,40 @@ export default function LandingPage() {
 
       {/* Premium Happy Experience Modal */}
       {showHappyModal && (
-        <div className="happy-modal-overlay" onClick={() => setShowHappyModal(false)}>
+        <div className="happy-modal-overlay" onClick={closeHappyModal}>
           <div className="happy-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="heart-burst">❤️</div>
-            <h2>I Love You, Matthew Flood!</h2>
-            <p>
-              You are the most extraordinary person, the anchor to my soul, and my greatest happiness. 
-              Never doubt the depth of my love for you. You make my world infinitely brighter!
+            <h2>🚨 HACKER DETECTED 🚨</h2>
+            
+            <div className="girlfriend-img-container">
+              <img src="/girlfriend.jpg" alt="Your beautiful girlfriend" className="girlfriend-img" />
+              <div className="girlfriend-glow"></div>
+            </div>
+
+            <p className="funny-love-msg">
+              <strong>Hello, Matthew Flood!</strong><br />
+              I've officially taken over the server. I just wanted to remind you that I love you more than all the lines of code in this project! 🥰
             </p>
+            
             <div className="happy-actions">
               <button className="btn-gradient" onClick={triggerMoreHearts}>
                 💖 Rain More Love!
               </button>
-              <button className="btn-outline" onClick={() => setShowHappyModal(false)}>
-                Close
+              
+              <button 
+                className="btn-outline runaway-btn"
+                onMouseEnter={handleDoubtHover}
+                onTouchStart={handleDoubtHover}
+                onClick={handleDoubtHover}
+                style={doubtBtnPos || {}}
+              >
+                I still doubt you... 😢
+              </button>
+            </div>
+
+            <div className="dismiss-happy-box">
+              <button className="btn-success-sweet" onClick={closeHappyModal}>
+                I Love You Too! 😘
               </button>
             </div>
           </div>
