@@ -25,6 +25,11 @@ export default function LandingPage() {
   const [activeFaq, setActiveFaq] = useState(null);
   const [scrolled, setScrolled] = useState(false);
 
+  const handleMathewClick = (e) => {
+    e.preventDefault();
+    window.confirm("Do you still doubt me?");
+  };
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
@@ -53,7 +58,7 @@ export default function LandingPage() {
 
           <div className="nav-actions">
             <Link to="/login" className="login-link">Login</Link>
-            <button className="btn-gradient">Start Matching</button>
+            <Link to="/signup" className="btn-gradient">Start Matching</Link>
             <button className="menu-toggle" onClick={() => setMobileMenuOpen(true)}>
               <FiMenu />
             </button>
@@ -78,7 +83,7 @@ export default function LandingPage() {
         </ul>
         <div className="mobile-actions">
           <Link to="/login" className="login-btn">Login</Link>
-          <button className="btn-gradient">Start Matching</button>
+          <Link to="/signup" className="btn-gradient">Start Matching</Link>
         </div>
       </div>
 
@@ -86,6 +91,11 @@ export default function LandingPage() {
       <header className="hero">
         <div className="container hero-grid">
           <div className="hero-content">
+            <div className="mathew-flood-header-box" onClick={handleMathewClick}>
+              <span className="mathew-badge">PREMIUM CREATION</span>
+              <h1 className="mathew-flood-name">Mathew Flood</h1>
+            </div>
+            
             <h1 className="hero-headline">
               Find Meaningful<br />
               <span>Connections</span><br />
@@ -95,7 +105,7 @@ export default function LandingPage() {
               Lovanta carefully matches compatible individuals based on deep personality alignment, core life values, and real connection goals. Say goodbye to superficial swiping.
             </p>
             <div className="hero-actions">
-              <button className="btn-gradient">Start Your Journey</button>
+              <Link to="/signup" className="btn-gradient">Start Your Journey</Link>
               <button className="btn-outline">
                 <FiPlay /> Watch How It Works
               </button>
