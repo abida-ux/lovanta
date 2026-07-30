@@ -42,27 +42,37 @@ const INITIAL_USERS = [
 
 export function getStoredUsers() {
   if (typeof window === 'undefined') return INITIAL_USERS;
+  const deletedEmails = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
   const stored = localStorage.getItem('lovanta_real_users');
+
+  let list = [];
   if (!stored) {
-    localStorage.setItem('lovanta_real_users', JSON.stringify(INITIAL_USERS));
-    return INITIAL_USERS;
-  }
-  try {
-    const list = JSON.parse(stored);
-    INITIAL_USERS.forEach(initUser => {
-      const idx = list.findIndex(u => u.email.toLowerCase() === initUser.email.toLowerCase());
-      if (idx === -1) {
-        list.push(initUser);
-      } else if (!list[idx].profileComplete || !list[idx].profileData) {
-        list[idx].profileComplete = true;
-        list[idx].profileData = initUser.profileData;
-      }
-    });
+    list = INITIAL_USERS.filter(u => !deletedEmails.includes(u.email.toLowerCase()));
     localStorage.setItem('lovanta_real_users', JSON.stringify(list));
     return list;
-  } catch (e) {
-    return INITIAL_USERS;
   }
+
+  try {
+    list = JSON.parse(stored);
+    INITIAL_USERS.forEach(initUser => {
+      const emailLower = initUser.email.toLowerCase();
+      if (!deletedEmails.includes(emailLower)) {
+        const idx = list.findIndex(u => u.email.toLowerCase() === emailLower);
+        if (idx === -1) {
+          list.push(initUser);
+        } else if (!list[idx].profileComplete || !list[idx].profileData) {
+          list[idx].profileComplete = true;
+          list[idx].profileData = initUser.profileData;
+        }
+      }
+    });
+  } catch (e) {
+    list = INITIAL_USERS.filter(u => !deletedEmails.includes(u.email.toLowerCase()));
+  }
+
+  const validList = list.filter(u => !deletedEmails.includes(u.email.toLowerCase()));
+  localStorage.setItem('lovanta_real_users', JSON.stringify(validList));
+  return validList;
 }
 
 function getAuthHeaders() {
@@ -84,6 +94,13 @@ async function parseResponse(response) {
 
 // ── Auth APIs ──
 export async function registerUser(payload) {
+  const deletedEmails = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
+  if (deletedEmails.includes(payload.email.toLowerCase())) {
+    // If user explicitly registers again after deleting, un-delete the email
+    const updatedDeleted = deletedEmails.filter(e => e !== payload.email.toLowerCase());
+    localStorage.setItem('lovanta_deleted_user_emails', JSON.stringify(updatedDeleted));
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
@@ -124,6 +141,11 @@ export async function registerUser(payload) {
 }
 
 export async function loginUser(payload) {
+  const deletedEmails = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
+  if (deletedEmails.includes(payload.email.toLowerCase())) {
+    throw new Error('This account has been deleted.');
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
@@ -192,26 +214,33 @@ export async function updateUserProfile(profileData) {
 }
 
 export async function deleteAccount() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/users/profile`, {
-      method: 'DELETE',
-      headers: getAuthHeaders(),
-    });
-    const data = await parseResponse(response);
-    if (response.ok) return data;
-  } catch (err) {
-    // Local fallback
-  }
-
   const token = localStorage.getItem('lovanta_token') || '';
   const currentUserId = token.replace('token_', '');
   const currentUserEmail = localStorage.getItem('lovanta_user_email') || '';
-  const users = getStoredUsers();
 
-  const filtered = users.filter((u) => u.id !== currentUserId && u.email.toLowerCase() !== currentUserEmail.toLowerCase());
-  localStorage.setItem('lovanta_real_users', JSON.stringify(filtered));
+  try {
+    await fetch(`${API_BASE_URL}/users/profile`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+  } catch (err) {
+    // Dev fallback
+  }
 
-  return { message: 'Account deleted successfully' };
+  if (currentUserEmail) {
+    const deletedList = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
+    if (!deletedList.includes(currentUserEmail.toLowerCase())) {
+      deletedList.push(currentUserEmail.toLowerCase());
+      localStorage.setItem('lovanta_deleted_user_emails', JSON.stringify(deletedList));
+    }
+  }
+
+  const users = getStoredUsers().filter(
+    (u) => u.id !== currentUserId && u.email.toLowerCase() !== currentUserEmail.toLowerCase()
+  );
+  localStorage.setItem('lovanta_real_users', JSON.stringify(users));
+
+  return { message: 'Account permanently deleted' };
 }
 
 export async function fetchCandidates() {
