@@ -1,0 +1,75 @@
+/* BottomNav.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 100;
+  padding: 0 8px;
+  box-shadow: 0 -4px 24px rgba(255, 79, 135, 0.06);
+}
+
+.bottom-nav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  color: #AAAAAA;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 8px 20px;
+  border-radius: 16px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.bottom-nav-link span {
+  line-height: 1;
+}
+
+.bottom-nav-link svg {
+  transition: all 0.2s ease;
+}
+
+.bottom-nav-link.active {
+  color: #FF4F87;
+}
+
+.bottom-nav-link.active svg {
+  filter: drop-shadow(0 2px 6px rgba(255, 79, 135, 0.4));
+  transform: scale(1.15);
+}
+
+/* Center match button pill */
+.bottom-nav-link.match-tab {
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 24px;
+  box-shadow: 0 4px 16px rgba(255, 79, 135, 0.35);
+  transform: translateY(-8px);
+}
+
+.bottom-nav-link.match-tab.active,
+.bottom-nav-link.match-tab:hover {
+  color: white;
+  transform: translateY(-10px);
+  box-shadow: 0 6px 20px rgba(255, 79, 135, 0.45);
+}
+
+.bottom-nav-link.match-tab svg {
+  filter: none !important;
+  transform: none !important;
+}

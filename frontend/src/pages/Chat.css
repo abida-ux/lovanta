@@ -1,0 +1,558 @@
+/* src/pages/Chat.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap');
+
+.tinder-chat-container {
+  min-height: 100%;
+  background: #FFF7FA;
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.tinder-chat-card {
+  width: 100%;
+  max-width: 1000px;
+  height: calc(100vh - 160px);
+  min-height: 550px;
+  background: #FFFFFF;
+  border-radius: 24px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* ── LEFT SIDEBAR (Matches & Convos) ── */
+.tinder-sidebar {
+  width: 340px;
+  border-right: 1px solid #F0F0F0;
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .tinder-sidebar {
+    width: 100%;
+  }
+  .tinder-sidebar.mobile-hidden {
+    display: none;
+  }
+  .tinder-viewport.mobile-hidden {
+    display: none;
+  }
+}
+
+.tinder-sidebar-header {
+  padding: 20px 20px 12px;
+}
+
+.tinder-sidebar-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+/* New Matches Horizontal Scroll Row (Tinder Stories Style) */
+.new-matches-section {
+  padding: 12px 20px;
+  border-bottom: 1px solid #F7F7F7;
+}
+
+.new-matches-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #FF4F87;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.new-matches-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.new-matches-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.new-match-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.new-match-avatar-ring {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  padding: 2.5px;
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  box-shadow: 0 4px 12px rgba(255, 79, 135, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.new-match-item:hover .new-match-avatar-ring {
+  transform: scale(1.06);
+}
+
+.new-match-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid white;
+}
+
+.new-match-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333333;
+}
+
+/* Convo List */
+.convos-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0;
+}
+
+.convos-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #888888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 20px 8px;
+}
+
+.convo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  position: relative;
+}
+
+.convo-item:hover {
+  background: #FFF7FA;
+}
+
+.convo-item.active {
+  background: #FFF0F5;
+}
+
+.convo-avatar-box {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.convo-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.convo-online-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #22C55E;
+  border: 2px solid white;
+}
+
+.convo-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.convo-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.convo-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #222222;
+}
+
+.convo-time {
+  font-size: 11px;
+  color: #AAAAAA;
+}
+
+.convo-snippet {
+  font-size: 13px;
+  color: #666666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.convo-unread-badge {
+  background: #FF4F87;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* ── RIGHT CHAT VIEWPORT ── */
+.tinder-viewport {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #FFFFFF;
+  position: relative;
+}
+
+.tinder-viewport-header {
+  height: 64px;
+  padding: 0 20px;
+  border-bottom: 1px solid #F0F0F0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #FFFFFF;
+}
+
+.tinder-user-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-back-btn {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #333;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .mobile-back-btn {
+    display: block;
+  }
+}
+
+.header-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.header-name-box h3 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.header-status {
+  font-size: 12px;
+  color: #22C55E;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.header-status.offline {
+  color: #888888;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22C55E;
+}
+
+.header-status.offline .status-dot {
+  background: #CCCCCC;
+}
+
+/* Animated Typing Indicator Bubble */
+.typing-bubble {
+  background: #F0F0F0;
+  padding: 10px 16px;
+  border-radius: 18px;
+  border-bottom-left-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+}
+
+.typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #999999;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); }
+}
+
+
+.info-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: #F8F8F8;
+  color: #666;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.info-btn:hover {
+  background: #FFF0F5;
+  color: #FF4F87;
+}
+
+/* Messages Stream */
+.tinder-messages-stream {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #FFFBFD;
+}
+
+.match-notice-banner {
+  text-align: center;
+  padding: 16px;
+  background: #FFF0F5;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.match-notice-banner p {
+  font-size: 13px;
+  color: #FF4F87;
+  font-weight: 600;
+}
+
+.msg-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  max-width: 70%;
+}
+
+.msg-bubble-wrap.me {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.msg-bubble-wrap.them {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.msg-bubble {
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.msg-bubble-wrap.me .msg-bubble {
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  color: white;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 3px 12px rgba(255, 79, 135, 0.2);
+}
+
+.msg-bubble-wrap.them .msg-bubble {
+  background: #F0F0F0;
+  color: #222222;
+  border-bottom-left-radius: 4px;
+}
+
+.msg-meta {
+  font-size: 10px;
+  color: #AAAAAA;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+/* Input Dock */
+.tinder-input-dock {
+  padding: 14px 20px;
+  border-top: 1px solid #F0F0F0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #FFFFFF;
+}
+
+.tinder-chat-input {
+  flex: 1;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1.5px solid #E5E7EB;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.tinder-chat-input:focus {
+  border-color: #FF4F87;
+}
+
+.tinder-send-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  color: white;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(255, 79, 135, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.tinder-send-btn:hover {
+  transform: scale(1.08);
+}
+
+.quick-heart-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.quick-heart-btn:hover {
+  transform: scale(1.2);
+}
+
+/* ── PROFILE SIDE DRAWER ── */
+.profile-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  background: #FFFFFF;
+  border-left: 1px solid #F0F0F0;
+  padding: 24px 20px;
+  overflow-y: auto;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.05);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: slideDrawer 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideDrawer {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+.drawer-close-btn {
+  align-self: flex-end;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #888;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.drawer-img {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #FF4F87;
+  box-shadow: 0 6px 20px rgba(255, 79, 135, 0.2);
+  margin-bottom: 12px;
+}
+
+.drawer-name {
+  font-family: 'Poppins', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1A1A1A;
+  margin-bottom: 2px;
+}
+
+.drawer-location {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.drawer-bio {
+  font-size: 13px;
+  color: #555;
+  text-align: center;
+  line-height: 1.5;
+  background: #FFF7FA;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.drawer-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.drawer-tag {
+  background: #FFF0F5;
+  color: #FF4F87;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid #FECDD3;
+}

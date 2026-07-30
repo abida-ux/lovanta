@@ -1,0 +1,421 @@
+/* CompleteProfile.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+.cp-wrapper {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #FFF0F5 0%, #FFFFFF 60%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 32px 16px 40px;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Header ── */
+.cp-header {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 28px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FF4F87, #D7263D);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cp-header svg {
+  fill: #FF4F87;
+  color: #FF4F87;
+  flex-shrink: 0;
+}
+
+/* ── Progress Bar ── */
+.cp-progress {
+  width: 100%;
+  max-width: 520px;
+  margin-bottom: 32px;
+}
+
+.cp-steps-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cp-step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #E5E7EB;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #AAAAAA;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.cp-step-dot.done {
+  background: #FF4F87;
+  border-color: #FF4F87;
+  color: white;
+}
+
+.cp-step-dot.current {
+  background: white;
+  border-color: #FF4F87;
+  color: #FF4F87;
+  box-shadow: 0 0 0 4px rgba(255, 79, 135, 0.12);
+}
+
+.cp-step-line {
+  flex: 1;
+  height: 2px;
+  background: #E5E7EB;
+  margin: 0 6px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cp-step-line.filled {
+  background: #FF4F87;
+}
+
+.cp-progress-label {
+  font-size: 13px;
+  color: #888;
+  font-weight: 500;
+  text-align: center;
+}
+
+.cp-progress-label strong {
+  color: #FF4F87;
+}
+
+/* ── Card ── */
+.cp-card {
+  background: white;
+  border-radius: 28px;
+  box-shadow: 0 16px 48px rgba(255, 79, 135, 0.08);
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 520px;
+  animation: cpFadeUp 0.4s ease forwards;
+}
+
+@keyframes cpFadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cp-card-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1A1A1A;
+  margin-bottom: 6px;
+}
+
+.cp-card-subtitle {
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+/* ── Step 1: Gallery Grid ── */
+.cp-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cp-gallery-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid #E5E7EB;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cp-gallery-item.is-main {
+  border-color: #FF4F87;
+  box-shadow: 0 0 0 3px rgba(255, 79, 135, 0.2);
+}
+
+.cp-gallery-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.main-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: #FF4F87;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.cp-remove-photo-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.cp-remove-photo-btn:hover {
+  background: #EF4444;
+}
+
+.cp-add-gallery-btn {
+  aspect-ratio: 1;
+  border-radius: 16px;
+  border: 2px dashed #FF4F87;
+  background: #FFF7FA;
+  color: #FF4F87;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cp-add-gallery-btn:hover {
+  background: #FFF0F5;
+  transform: scale(1.03);
+}
+
+.cp-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.cp-preset-img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cp-preset-img:hover {
+  transform: scale(1.05);
+}
+
+.cp-preset-img.active {
+  border-color: #FF4F87;
+}
+
+
+.cp-upload-btn {
+  width: 100%;
+  padding: 14px;
+  border: 2px dashed #E5E7EB;
+  border-radius: 14px;
+  background: white;
+  color: #888;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.cp-upload-btn:hover {
+  border-color: #FF4F87;
+  color: #FF4F87;
+  background: #FFF7FA;
+}
+
+.cp-upload-input {
+  display: none;
+}
+
+.cp-photo-preview {
+  width: 100%;
+  height: 160px;
+  border-radius: 16px;
+  object-fit: cover;
+  margin-bottom: 12px;
+  border: 2px solid #FF4F87;
+}
+
+/* ── Step 2: Bio ── */
+.cp-input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1.5px solid #E5E7EB;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  color: #222;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  margin-bottom: 16px;
+  background: white;
+}
+
+.cp-input:focus {
+  border-color: #FF4F87;
+  box-shadow: 0 0 0 4px rgba(255, 79, 135, 0.07);
+}
+
+.cp-textarea {
+  resize: none;
+  min-height: 100px;
+  line-height: 1.6;
+}
+
+.cp-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 6px;
+}
+
+.cp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── Step 3: Interests ── */
+.cp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.cp-chip {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1.5px solid #E5E7EB;
+  background: white;
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.cp-chip:hover {
+  border-color: #FF4F87;
+  color: #FF4F87;
+}
+
+.cp-chip.selected {
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 79, 135, 0.25);
+}
+
+.cp-chip-hint {
+  font-size: 12px;
+  color: #AAA;
+  margin-bottom: 16px;
+}
+
+/* ── Navigation buttons ── */
+.cp-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.cp-btn-back {
+  padding: 14px 20px;
+  border-radius: 12px;
+  border: 1.5px solid #E5E7EB;
+  background: white;
+  font-size: 15px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.cp-btn-back:hover {
+  border-color: #FF4F87;
+  color: #FF4F87;
+}
+
+.cp-btn-next {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(255, 79, 135, 0.3);
+}
+
+.cp-btn-next:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 79, 135, 0.4);
+}
+
+.cp-btn-next:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cp-error {
+  font-size: 13px;
+  color: #E53E3E;
+  margin-top: 8px;
+  font-weight: 500;
+}

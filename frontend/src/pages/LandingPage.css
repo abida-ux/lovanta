@@ -1,0 +1,369 @@
+/* LandingPage.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap');
+
+:root {
+  --primary: #FF4F87;
+  --secondary: #FF7DA8;
+  --accent: #D7263D;
+  --bg: #FFFFFF;
+  --soft-bg: #FFF7FA;
+  --text: #1A1A1A;
+  --light-text: #666666;
+}
+
+.lovanta-scope * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.lovanta-scope {
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  background-color: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.lovanta-scope .container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Navbar */
+.lovanta-scope .navbar {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 100;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.lovanta-scope .nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lovanta-scope .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-decoration: none;
+}
+
+.lovanta-scope .logo-icon {
+  fill: var(--primary);
+  color: var(--primary);
+  width: 24px;
+  height: 24px;
+}
+
+.lovanta-scope .nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lovanta-scope .login-link {
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  transition: all 0.2s ease;
+}
+
+.lovanta-scope .login-link:hover {
+  color: var(--primary);
+  background: var(--soft-bg);
+}
+
+.lovanta-scope .btn-gradient {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 50px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(255, 79, 135, 0.25);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.lovanta-scope .btn-gradient:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 79, 135, 0.35);
+}
+
+.lovanta-scope .btn-outline {
+  background: white;
+  color: var(--text);
+  border: 1.5px solid #E5E7EB;
+  padding: 12px 24px;
+  border-radius: 50px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.lovanta-scope .btn-outline:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--soft-bg);
+}
+
+.lovanta-scope .menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+/* Mobile Nav Drawer */
+.lovanta-scope .mobile-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 999;
+}
+
+.lovanta-scope .mobile-nav {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 280px;
+  background: white;
+  z-index: 1000;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  transform: translateX(100%);
+}
+
+.lovanta-scope .mobile-nav.ready {
+  transition: transform 0.3s ease;
+}
+
+.lovanta-scope .mobile-nav.open {
+  transform: translateX(0);
+}
+
+.lovanta-scope .mobile-nav-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lovanta-scope .mobile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lovanta-scope .login-btn {
+  text-align: center;
+  padding: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* Compact Hero */
+.lovanta-scope .hero-compact {
+  padding: 80px 0 60px;
+  background: radial-gradient(ellipse at 50% 0%, #FFE4ED 0%, #FFF7FA 50%, #FFFFFF 100%);
+  text-align: center;
+}
+
+.lovanta-scope .hero-compact-content {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lovanta-scope .hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FFF0F5;
+  border: 1px solid #FECDD3;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 999px;
+  margin-bottom: 24px;
+}
+
+.lovanta-scope .hero-compact-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 18px;
+  letter-spacing: -1px;
+  color: var(--text);
+}
+
+.lovanta-scope .hero-compact-title span {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.lovanta-scope .hero-compact-desc {
+  font-size: 17px;
+  color: var(--light-text);
+  line-height: 1.6;
+  margin-bottom: 36px;
+  max-width: 600px;
+}
+
+.lovanta-scope .hero-compact-buttons {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.lovanta-scope .hero-btn {
+  padding: 14px 32px;
+  font-size: 16px;
+}
+
+/* Features Grid */
+.lovanta-scope .features-compact {
+  padding: 60px 0 80px;
+  background: var(--bg);
+}
+
+.lovanta-scope .features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.lovanta-scope .feature-card {
+  background: var(--soft-bg);
+  border: 1px solid #FFE4ED;
+  padding: 32px 24px;
+  border-radius: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.lovanta-scope .feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(255, 79, 135, 0.08);
+}
+
+.lovanta-scope .feature-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: white;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin: 0 auto 16px;
+  box-shadow: 0 4px 12px rgba(255, 79, 135, 0.12);
+}
+
+.lovanta-scope .feature-card h3 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.lovanta-scope .feature-card p {
+  font-size: 14px;
+  color: var(--light-text);
+  line-height: 1.5;
+}
+
+/* Minimal Footer */
+.lovanta-scope .footer-compact {
+  margin-top: auto;
+  border-top: 1px solid #F0F0F0;
+  padding: 24px 0;
+  font-size: 14px;
+  color: var(--light-text);
+}
+
+.lovanta-scope .footer-compact-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lovanta-scope .footer-compact-links {
+  display: flex;
+  gap: 20px;
+}
+
+.lovanta-scope .footer-compact-links a {
+  color: var(--light-text);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.lovanta-scope .footer-compact-links a:hover {
+  color: var(--primary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .lovanta-scope .menu-toggle {
+    display: block;
+  }
+  .lovanta-scope .nav-actions .login-link,
+  .lovanta-scope .nav-actions .btn-gradient {
+    display: none;
+  }
+  .lovanta-scope .hero-compact-title {
+    font-size: 34px;
+  }
+  .lovanta-scope .features-grid {
+    grid-template-columns: 1fr;
+  }
+  .lovanta-scope .footer-compact-inner {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

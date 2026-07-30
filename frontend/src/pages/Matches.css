@@ -1,0 +1,405 @@
+/* Matches.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap');
+
+.matches-page {
+  min-height: 100%;
+  background: #FFF7FA;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px 32px;
+  font-family: 'Inter', sans-serif;
+}
+
+/* ── Section title ── */
+.matches-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1A1A1A;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.matches-subtitle {
+  font-size: 13px;
+  color: #AAAAAA;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+/* ── Deck ── */
+.swipe-deck {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  height: 520px;
+  margin-bottom: 28px;
+}
+
+.swipe-card {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transition: box-shadow 0.2s ease;
+  background: white;
+}
+
+.swipe-card:active { cursor: grabbing; }
+
+.swipe-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.swipe-card-emoji-bg {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(160deg, #FFE4F0, #FFF0F5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 120px;
+  pointer-events: none;
+}
+
+/* Multi-photo indicators on card */
+.card-photo-indicators {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+  cursor: pointer;
+}
+
+.photo-dot {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.photo-dot.active {
+  background: #FFFFFF;
+}
+
+.matches-empty-icon-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #FFF0F5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.match-celebration-sparkle {
+  margin-bottom: 8px;
+}
+
+/* Gradient overlay at bottom */
+.swipe-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 80px 24px 24px;
+  background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.swipe-card-name {
+  font-family: 'Poppins', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 4px;
+}
+
+.swipe-card-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 10px;
+}
+
+.swipe-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swipe-card-chip {
+  background: rgba(255,255,255,0.22);
+  backdrop-filter: blur(6px);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* Swipe decision stamps */
+.swipe-stamp {
+  position: absolute;
+  top: 36px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border: 4px solid;
+  padding: 6px 18px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transform: rotate(-15deg);
+}
+
+.swipe-stamp.like {
+  left: 24px;
+  color: #22C55E;
+  border-color: #22C55E;
+  transform: rotate(-15deg);
+}
+
+.swipe-stamp.nope {
+  right: 24px;
+  color: #EF4444;
+  border-color: #EF4444;
+  transform: rotate(15deg);
+}
+
+/* Stack cards behind */
+.swipe-card-behind {
+  transform: scale(0.94) translateY(16px);
+  z-index: 0;
+  pointer-events: none;
+}
+.swipe-card-behind-2 {
+  transform: scale(0.88) translateY(32px);
+  z-index: -1;
+  pointer-events: none;
+}
+.swipe-card-front {
+  z-index: 2;
+}
+
+/* ── Action buttons ── */
+.swipe-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.swipe-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  transition: all 0.2s ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+}
+
+.swipe-btn.skip {
+  background: white;
+  color: #EF4444;
+}
+.swipe-btn.skip:hover {
+  background: #FEF2F2;
+  transform: scale(1.08);
+}
+
+.swipe-btn.like {
+  background: white;
+  color: #22C55E;
+}
+.swipe-btn.like:hover {
+  background: #F0FDF4;
+  transform: scale(1.08);
+}
+
+.swipe-btn.super {
+  width: 52px;
+  height: 52px;
+  background: white;
+  color: #3B82F6;
+  font-size: 20px;
+}
+.swipe-btn.super:hover {
+  background: #EFF6FF;
+  transform: scale(1.08);
+}
+
+/* ── Empty / Refetch state ── */
+.matches-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  text-align: center;
+  gap: 12px;
+}
+
+.matches-empty-emoji {
+  font-size: 64px;
+}
+
+.matches-empty h3 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1A1A1A;
+}
+
+.matches-empty p {
+  font-size: 14px;
+  color: #AAA;
+  max-width: 260px;
+}
+
+.matches-empty-btn {
+  margin-top: 8px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(255, 79, 135, 0.3);
+  transition: all 0.2s ease;
+}
+
+.matches-empty-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 79, 135, 0.4);
+}
+
+/* ── It's a Match overlay ── */
+.match-celebration {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 0, 20, 0.7);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.3s ease;
+  gap: 20px;
+  padding: 24px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.match-celebration-emoji {
+  font-size: 72px;
+  animation: popIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes popIn {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
+}
+
+.match-celebration h2 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-align: center;
+}
+
+.match-celebration p {
+  color: rgba(255,255,255,0.8);
+  font-size: 15px;
+  text-align: center;
+}
+
+.match-celebration-avatars {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.match-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #FF4F87;
+}
+
+.match-avatar-emoji {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #FFF0F5;
+  border: 3px solid #FF4F87;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+}
+
+.match-heart-divider {
+  font-size: 28px;
+}
+
+.match-celebration-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.match-btn-msg {
+  padding: 13px 28px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #FF4F87, #FF7DA8);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(255, 79, 135, 0.35);
+}
+
+.match-btn-skip {
+  padding: 13px 28px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.3);
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
