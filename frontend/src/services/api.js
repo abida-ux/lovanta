@@ -191,6 +191,29 @@ export async function updateUserProfile(profileData) {
   return { message: 'Profile updated' };
 }
 
+export async function deleteAccount() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/profile`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    const data = await parseResponse(response);
+    if (response.ok) return data;
+  } catch (err) {
+    // Local fallback
+  }
+
+  const token = localStorage.getItem('lovanta_token') || '';
+  const currentUserId = token.replace('token_', '');
+  const currentUserEmail = localStorage.getItem('lovanta_user_email') || '';
+  const users = getStoredUsers();
+
+  const filtered = users.filter((u) => u.id !== currentUserId && u.email.toLowerCase() !== currentUserEmail.toLowerCase());
+  localStorage.setItem('lovanta_real_users', JSON.stringify(filtered));
+
+  return { message: 'Account deleted successfully' };
+}
+
 export async function fetchCandidates() {
   try {
     const response = await fetch(`${API_BASE_URL}/users/candidates`, {

@@ -32,7 +32,7 @@ function App() {
         <Route path="/matches" element={<Matches />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/profile" element={<Profile />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings" element={<Navigate to="/profile" replace />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/premium" element={<Premium />} />

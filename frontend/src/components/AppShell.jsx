@@ -38,9 +38,6 @@ export default function AppShell({ children }) {
             <FiBell size={20} />
             {unreadCount > 0 && <span className="app-topbar-badge" />}
           </Link>
-          <Link to="/settings" className="app-topbar-icon-btn" aria-label="Settings">
-            <FiSettings size={20} />
-          </Link>
           <button className="app-topbar-icon-btn" onClick={handleLogout} aria-label="Log Out" title="Log Out">
             <FiLogOut size={19} color="#EF4444" />
           </button>

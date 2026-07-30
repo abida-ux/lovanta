@@ -18,9 +18,11 @@ import {
   FiFeather,
   FiZap,
   FiUser,
-  FiLogOut
+  FiLogOut,
+  FiAlertTriangle
 } from 'react-icons/fi';
 import { getStoredAuth, updateProfile, logoutUser } from '../services/auth';
+import { deleteAccount } from '../services/api';
 import AppShell from '../components/AppShell';
 import './Profile.css';
 
@@ -51,6 +53,8 @@ export default function Profile() {
     gallery: profileData?.gallery || []
   });
   const [saved, setSaved] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (!token) return <Navigate to="/login" replace />;
 
@@ -98,6 +102,18 @@ export default function Profile() {
   const handleLogout = () => {
     logoutUser();
     window.location.href = '/login';
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+    } catch (e) {
+      // Ignore
+    } finally {
+      logoutUser();
+      window.location.href = '/login';
+    }
   };
 
   const displayName = userName || 'Member';
@@ -254,7 +270,50 @@ export default function Profile() {
               <FiCheck size={16} /> Profile updated successfully!
             </p>
           )}
+
+          {/* Delete Account Option */}
+          <div className="profile-danger-zone">
+            <button
+              type="button"
+              className="profile-delete-account-btn"
+              onClick={() => setShowDeleteModal(true)}
+            >
+              <FiTrash2 size={16} /> Delete Account
+            </button>
+          </div>
         </form>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="delete-modal-overlay" onClick={() => setShowDeleteModal(false)}>
+            <div className="delete-modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="delete-modal-icon">
+                <FiAlertTriangle size={32} color="#EF4444" />
+              </div>
+              <h3>Delete Account?</h3>
+              <p>Are you sure you want to permanently delete your account? All your matches, messages, and profile data will be erased. This action cannot be undone.</p>
+
+              <div className="delete-modal-actions">
+                <button
+                  type="button"
+                  className="delete-cancel-btn"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="delete-confirm-btn"
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting...' : 'Yes, Delete Account'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </AppShell>

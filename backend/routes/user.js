@@ -170,4 +170,14 @@ router.get('/matches', authenticate, async (req, res) => {
   }
 });
 
+// DELETE user account
+router.delete('/profile', authenticate, async (req, res) => {
+  try {
+    await User.findByIdAndDelete(req.userId);
+    res.json({ message: 'Account deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete account' });
+  }
+});
+
 module.exports = router;
