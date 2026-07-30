@@ -49,7 +49,6 @@ export function getStoredUsers() {
   }
   try {
     const list = JSON.parse(stored);
-    // Ensure initial seeded accounts are present and complete
     INITIAL_USERS.forEach(initUser => {
       const idx = list.findIndex(u => u.email.toLowerCase() === initUser.email.toLowerCase());
       if (idx === -1) {
@@ -93,8 +92,11 @@ export async function registerUser(payload) {
     });
     const data = await parseResponse(response);
     if (response.ok) return data;
+    throw new Error(data.message || 'Registration failed');
   } catch (err) {
-    // Offline mode
+    if (err.message && err.message !== 'Failed to fetch' && !err.message.includes('fetch')) {
+      throw err;
+    }
   }
 
   const users = getStoredUsers();
@@ -130,8 +132,11 @@ export async function loginUser(payload) {
     });
     const data = await parseResponse(response);
     if (response.ok) return data;
+    throw new Error(data.message || 'Invalid email or password');
   } catch (err) {
-    // Offline mode
+    if (err.message && err.message !== 'Failed to fetch' && !err.message.includes('fetch')) {
+      throw err;
+    }
   }
 
   const users = getStoredUsers();
@@ -149,7 +154,7 @@ export async function loginUser(payload) {
       id: user.id,
       name: user.name,
       email: user.email,
-      profileComplete: user.profileComplete || false,
+      profileComplete: !!(user.profileComplete && user.profileData),
       profileData: user.profileData || null,
     },
   };
@@ -165,8 +170,11 @@ export async function updateUserProfile(profileData) {
     });
     const data = await parseResponse(response);
     if (response.ok) return data;
+    throw new Error(data.message || 'Failed to update profile');
   } catch (err) {
-    // Local storage fallback
+    if (err.message && err.message !== 'Failed to fetch' && !err.message.includes('fetch')) {
+      throw err;
+    }
   }
 
   const token = localStorage.getItem('lovanta_token') || '';
@@ -191,7 +199,7 @@ export async function fetchCandidates() {
     const data = await parseResponse(response);
     if (response.ok && Array.isArray(data)) return data;
   } catch (err) {
-    // Local storage fallback
+    // Dev fallback
   }
 
   const token = localStorage.getItem('lovanta_token') || '';
@@ -230,7 +238,7 @@ export async function likeUser(targetId) {
     const data = await parseResponse(response);
     if (response.ok) return data;
   } catch (err) {
-    // Local fallback
+    // Dev fallback
   }
 
   const token = localStorage.getItem('lovanta_token') || '';
@@ -245,16 +253,13 @@ export async function likeUser(targetId) {
 
   const targetMatchesKey = `lovanta_matches_${targetId}`;
   const targetMatches = JSON.parse(localStorage.getItem(targetMatchesKey) || '[]');
-  const isMatch = true; // match enabled for testing
 
-  if (isMatch) {
-    if (!targetMatches.includes(currentUserId)) {
-      targetMatches.push(currentUserId);
-      localStorage.setItem(targetMatchesKey, JSON.stringify(targetMatches));
-    }
+  if (!targetMatches.includes(currentUserId)) {
+    targetMatches.push(currentUserId);
+    localStorage.setItem(targetMatchesKey, JSON.stringify(targetMatches));
   }
 
-  return { isMatch };
+  return { isMatch: true };
 }
 
 export async function fetchMatches() {
@@ -265,7 +270,7 @@ export async function fetchMatches() {
     const data = await parseResponse(response);
     if (response.ok && Array.isArray(data)) return data;
   } catch (err) {
-    // Local fallback
+    // Dev fallback
   }
 
   const token = localStorage.getItem('lovanta_token') || '';
@@ -303,7 +308,7 @@ export async function fetchMessages(recipientId) {
     const data = await parseResponse(response);
     if (response.ok && Array.isArray(data)) return data;
   } catch (err) {
-    // Local fallback
+    // Dev fallback
   }
 
   const token = localStorage.getItem('lovanta_token') || '';
@@ -322,7 +327,7 @@ export async function sendMessage(recipientId, text) {
     const data = await parseResponse(response);
     if (response.ok) return data;
   } catch (err) {
-    // Local fallback
+    // Dev fallback
   }
 
   const token = localStorage.getItem('lovanta_token') || '';
