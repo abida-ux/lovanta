@@ -271,7 +271,14 @@ export async function fetchMatches() {
   const token = localStorage.getItem('lovanta_token') || '';
   const currentUserId = token.replace('token_', '');
   const matchesKey = `lovanta_matches_${currentUserId}`;
-  const matchIds = JSON.parse(localStorage.getItem(matchesKey) || '[]');
+  let matchIds = JSON.parse(localStorage.getItem(matchesKey) || 'null');
+
+  if (!matchIds) {
+    if (currentUserId === 'usr_abed') matchIds = ['usr_sophia'];
+    else if (currentUserId === 'usr_sophia') matchIds = ['usr_abed'];
+    else matchIds = [];
+    localStorage.setItem(matchesKey, JSON.stringify(matchIds));
+  }
   const users = getStoredUsers();
 
   return users

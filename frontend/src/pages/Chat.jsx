@@ -82,38 +82,11 @@ export default function Chat() {
     const newMsg = await sendMessage(activeId, textToSend);
     setMessages(prev => [...prev, newMsg || {
       id: 'msg_' + Date.now(),
-      sender: 'me',
+      sender: currentUserId,
+      recipient: activeId,
       text: textToSend,
       createdAt: new Date().toISOString()
     }]);
-
-    // Simulate real-time response & typing indicator from matched user
-    setTimeout(() => {
-      setIsTyping(true);
-    }, 800);
-
-    setTimeout(async () => {
-      setIsTyping(false);
-      const responses = [
-        "Hey! Great hearing from you 😊 How is your day going?",
-        "Loved your photos! What are your favorite spots around town?",
-        "That sounds awesome! We should definitely get coffee sometime soon.",
-        "Haha totally agree! Always nice connecting with someone who shares similar vibes."
-      ];
-      const randomReply = responses[Math.floor(Math.random() * responses.length)];
-      
-      // Save simulated reply into local storage / message list
-      const chatKey = `lovanta_chat_${['token_' + activeId, token].sort().join('_')}`;
-      const replyMsg = {
-        id: 'msg_' + Date.now(),
-        sender: activeId,
-        recipient: 'me',
-        text: randomReply,
-        createdAt: new Date().toISOString()
-      };
-      
-      setMessages(prev => [...prev, replyMsg]);
-    }, 2800);
   };
 
   const handleQuickHeart = () => {
