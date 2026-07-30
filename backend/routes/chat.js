@@ -32,7 +32,15 @@ router.get('/:recipientId', authenticate, async (req, res) => {
       ],
     }).sort({ createdAt: 1 });
 
-    res.json(messages);
+    const formatted = messages.map((m) => ({
+      id: m._id,
+      sender: m.sender,
+      recipient: m.recipient,
+      text: m.text,
+      createdAt: m.createdAt,
+    }));
+
+    res.json(formatted);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch messages' });
   }

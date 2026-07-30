@@ -164,7 +164,18 @@ router.get('/matches', authenticate, async (req, res) => {
     );
     if (!currentUser) return res.status(404).json({ message: 'User not found' });
 
-    res.json(currentUser.matches);
+    const formattedMatches = (currentUser.matches || []).map((m) => ({
+      id: m._id,
+      name: m.name,
+      age: m.age || 25,
+      avatar: m.avatar || m.gallery?.[0] || '',
+      photo: m.avatar || m.gallery?.[0] || '',
+      location: m.location || '',
+      bio: m.bio || '',
+      interests: m.interests || [],
+    }));
+
+    res.json(formattedMatches);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch matches' });
   }
