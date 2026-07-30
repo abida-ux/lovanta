@@ -184,10 +184,24 @@ router.get('/matches', authenticate, async (req, res) => {
 // DELETE user account
 router.delete('/profile', authenticate, async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.userId);
+    const userId = req.userId;
+    const Message = require('../models/Message');
+
+    // 1. Delete all user messages from MongoDB
+    await Message.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] });
+
+    // 2. Remove user ID from all other users' matches, likes, and dislikes
+    await User.updateMany(
+      {},
+      { $pull: { matches: userId, likes: userId, dislikes: userId } }
+    );
+
+    // 3. Permanently delete user document from MongoDB
+    await User.findByIdAndDelete(userId);
+
     res.json({ message: 'Account deleted successfully' });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to delete account' });
+    res.status(500).json({ message: 'Failed to delete account', error: err.message });
   }
 });
 

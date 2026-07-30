@@ -42,37 +42,16 @@ const INITIAL_USERS = [
 
 export function getStoredUsers() {
   if (typeof window === 'undefined') return INITIAL_USERS;
-  const deletedEmails = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
   const stored = localStorage.getItem('lovanta_real_users');
-
-  let list = [];
   if (!stored) {
-    list = INITIAL_USERS.filter(u => !deletedEmails.includes(u.email.toLowerCase()));
-    localStorage.setItem('lovanta_real_users', JSON.stringify(list));
-    return list;
+    localStorage.setItem('lovanta_real_users', JSON.stringify(INITIAL_USERS));
+    return INITIAL_USERS;
   }
-
   try {
-    list = JSON.parse(stored);
-    INITIAL_USERS.forEach(initUser => {
-      const emailLower = initUser.email.toLowerCase();
-      if (!deletedEmails.includes(emailLower)) {
-        const idx = list.findIndex(u => u.email.toLowerCase() === emailLower);
-        if (idx === -1) {
-          list.push(initUser);
-        } else if (!list[idx].profileComplete || !list[idx].profileData) {
-          list[idx].profileComplete = true;
-          list[idx].profileData = initUser.profileData;
-        }
-      }
-    });
+    return JSON.parse(stored);
   } catch (e) {
-    list = INITIAL_USERS.filter(u => !deletedEmails.includes(u.email.toLowerCase()));
+    return INITIAL_USERS;
   }
-
-  const validList = list.filter(u => !deletedEmails.includes(u.email.toLowerCase()));
-  localStorage.setItem('lovanta_real_users', JSON.stringify(validList));
-  return validList;
 }
 
 function getAuthHeaders() {
@@ -94,13 +73,6 @@ async function parseResponse(response) {
 
 // ── Auth APIs ──
 export async function registerUser(payload) {
-  const deletedEmails = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
-  if (deletedEmails.includes(payload.email.toLowerCase())) {
-    // If user explicitly registers again after deleting, un-delete the email
-    const updatedDeleted = deletedEmails.filter(e => e !== payload.email.toLowerCase());
-    localStorage.setItem('lovanta_deleted_user_emails', JSON.stringify(updatedDeleted));
-  }
-
   try {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
@@ -125,7 +97,7 @@ export async function registerUser(payload) {
   const newUser = {
     id: 'usr_' + Date.now(),
     name: payload.name,
-    email: payload.email,
+    email: payload.email.toLowerCase(),
     password: payload.password,
     profileComplete: false,
     profileData: null
@@ -141,11 +113,6 @@ export async function registerUser(payload) {
 }
 
 export async function loginUser(payload) {
-  const deletedEmails = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
-  if (deletedEmails.includes(payload.email.toLowerCase())) {
-    throw new Error('This account has been deleted.');
-  }
-
   try {
     const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
@@ -224,21 +191,20 @@ export async function deleteAccount() {
       headers: getAuthHeaders(),
     });
   } catch (err) {
-    // Dev fallback
+    // Offline fallback
   }
 
-  if (currentUserEmail) {
-    const deletedList = JSON.parse(localStorage.getItem('lovanta_deleted_user_emails') || '[]');
-    if (!deletedList.includes(currentUserEmail.toLowerCase())) {
-      deletedList.push(currentUserEmail.toLowerCase());
-      localStorage.setItem('lovanta_deleted_user_emails', JSON.stringify(deletedList));
+  const stored = localStorage.getItem('lovanta_real_users');
+  if (stored) {
+    try {
+      const users = JSON.parse(stored).filter(
+        (u) => u.id !== currentUserId && u.email?.toLowerCase() !== currentUserEmail?.toLowerCase()
+      );
+      localStorage.setItem('lovanta_real_users', JSON.stringify(users));
+    } catch (e) {
+      // Ignore
     }
   }
-
-  const users = getStoredUsers().filter(
-    (u) => u.id !== currentUserId && u.email.toLowerCase() !== currentUserEmail.toLowerCase()
-  );
-  localStorage.setItem('lovanta_real_users', JSON.stringify(users));
 
   return { message: 'Account permanently deleted' };
 }
