@@ -21,13 +21,14 @@ const loginRateLimit = rateLimit({
 router.post("/login", loginRateLimit, async (req, res) => {
   const input = parseInput(
     z.object({
-      email: z.string().trim().email().max(254),
+      email: z.string().trim().min(1).max(254),
       password: z.string().min(1).max(128),
     }),
     req.body,
   );
-  const worker = await Worker.findOne({ email: input.email.toLowerCase() })
-    .select("+passwordHash");
+  const identifier = input.email.toLowerCase();
+  const worker = await Worker.findOne({ email: identifier }).select("+passwordHash")
+    ?? await Worker.findOne({ username: identifier }).select("+passwordHash");
   if (!worker || !worker.active || worker.suspendedAt) {
     throw new HttpError(401, "Email or password is incorrect");
   }

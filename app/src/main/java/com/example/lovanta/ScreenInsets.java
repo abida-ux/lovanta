@@ -13,8 +13,12 @@ final class ScreenInsets {
     private ScreenInsets() {}
 
     static void applyToMainRoot(ComponentActivity activity) {
+        applyToRoot(activity, R.id.main);
+    }
+
+    static void applyToRoot(ComponentActivity activity, int rootId) {
         EdgeToEdge.enable(activity);
-        View root = activity.findViewById(R.id.main);
+        View root = activity.findViewById(rootId);
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, windowInsets) -> {
             Insets systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
             view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);

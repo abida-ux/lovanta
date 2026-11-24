@@ -27,6 +27,9 @@ const paginationSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().max(100).optional(),
 });
+const modelListSchema = paginationSchema.extend({
+  status: z.enum(["active", "inactive", "suspended", "archived"]).optional(),
+});
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i);
 
 async function audit(
@@ -113,15 +116,57 @@ router.get("/dashboard", authorizePermission("dashboard.read"), async (_req, res
 });
 
 router.get("/models", authorizePermission("models.read"), async (req, res) => {
-  const { page, limit, search } = parseInput(paginationSchema, req.query);
-  const filter = search
-    ? { $or: [{ displayName: { $regex: search, $options: "i" } }, { username: { $regex: search, $options: "i" } }] }
-    : {};
+  const { page, limit, search, status } = parseInput(modelListSchema, req.query);
+  const conditions: Record<string, unknown>[] = [];
+  if (search) {
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const searchConditions: Record<string, unknown>[] = [
+      { displayName: { $regex: escapedSearch, $options: "i" } },
+      { username: { $regex: escapedSearch, $options: "i" } },
+    ];
+    if (/^[a-f\d]{24}$/i.test(search)) {
+      searchConditions.push({ _id: new Types.ObjectId(search) });
+    }
+    conditions.push({
+      $or: searchConditions,
+    });
+  }
+  if (status === "active") {
+    conditions.push({
+      $or: [{ status: "active" }, { status: { $exists: false }, active: true }],
+    });
+  } else if (status === "inactive") {
+    conditions.push({
+      $or: [{ status: "inactive" }, { status: { $exists: false }, active: false }],
+    });
+  } else if (status) {
+    conditions.push({ status });
+  }
+  const filter = conditions.length > 0 ? { $and: conditions } : {};
   const [items, total] = await Promise.all([
     ModelAccount.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     ModelAccount.countDocuments(filter),
   ]);
-  res.json({ items, total, page, limit });
+  res.json({
+    items: items.map((item) => ({ ...item, modelId: item._id.toString() })),
+    total,
+    page,
+    limit,
+  });
+});
+
+router.get("/models/:id", authorizePermission("models.read"), async (req, res) => {
+  const id = parseInput(objectIdSchema, req.params.id);
+  const modelAccount = await ModelAccount.findById(id).lean();
+  if (!modelAccount) throw new HttpError(404, "Model not found");
+  const assignments = await WorkerAssignment.find({ modelAccountId: id, active: true })
+    .populate("workerId", "displayName username email role active")
+    .sort({ assignedAt: -1 })
+    .lean();
+  res.json({
+    model: { ...modelAccount, modelId: modelAccount._id.toString() },
+    assignments,
+  });
 });
 
 router.post("/models", authorize("ADMIN"), async (req, res) => {
@@ -154,7 +199,7 @@ router.post("/models", authorize("ADMIN"), async (req, res) => {
   });
   await modelAccount.save();
   await audit(req, "model.create", "ModelAccount", modelAccount._id.toString(), null, input);
-  res.status(201).json({ model: modelAccount });
+  res.status(201).json({ model: modelAccount, modelId: modelAccount._id.toString() });
 });
 
 router.patch("/models/:id", authorize("ADMIN"), async (req, res) => {
@@ -178,15 +223,18 @@ router.patch("/models/:id", authorize("ADMIN"), async (req, res) => {
     }),
     req.body,
   );
-  const modelAccount = await ModelAccount.findByIdAndUpdate(id, input, { new: true, runValidators: true });
-  if (!modelAccount) throw new HttpError(404, "Model not found");
+  const update: Record<string, unknown> = { ...input };
   if (input.status !== undefined) {
-    modelAccount.active = input.status === "active";
-    modelAccount.archivedAt = input.status === "archived" ? new Date() : null;
-    await modelAccount.save();
+    update.active = input.status === "active";
+    update.archivedAt = input.status === "archived" ? new Date() : null;
+  } else if (input.active !== undefined) {
+    update.status = input.active ? "active" : "inactive";
+    update.archivedAt = null;
   }
+  const modelAccount = await ModelAccount.findByIdAndUpdate(id, update, { new: true, runValidators: true });
+  if (!modelAccount) throw new HttpError(404, "Model not found");
   await audit(req, "model.update", "ModelAccount", id, before, modelAccount);
-  res.json({ model: modelAccount });
+  res.json({ model: modelAccount, modelId: modelAccount._id.toString() });
 });
 
 router.get("/chatters", authorizePermission("chatters.read"), async (req, res) => {
@@ -206,12 +254,38 @@ router.get("/chatters", authorizePermission("chatters.read"), async (req, res) =
   res.json({ items, total, page, limit });
 });
 
+async function nextGeneratedChatterEmail(): Promise<string> {
+  const accounts = await Worker.find({ email: /^chatter\d+@gmail\.com$/i })
+    .select("email")
+    .lean();
+  const highestNumber = accounts.reduce((highest, account) => {
+    const match = /^chatter(\d+)@gmail\.com$/i.exec(account.email);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  return `chatter${highestNumber + 1}@gmail.com`;
+}
+
+function isDuplicateEmailError(error: unknown): boolean {
+  if (
+    typeof error !== "object"
+    || error === null
+    || !("code" in error)
+    || error.code !== 11000
+  ) {
+    return false;
+  }
+  const duplicateKey = "keyPattern" in error ? error.keyPattern : undefined;
+  return typeof duplicateKey === "object"
+    && duplicateKey !== null
+    && "email" in duplicateKey;
+}
+
 router.post("/chatters", authorize("ADMIN"), async (req, res) => {
   const input = parseInput(
     z.object({
       displayName: z.string().trim().min(1).max(100),
       username: z.string().trim().min(1).max(100).optional(),
-      email: z.string().trim().email().max(254),
+      email: z.string().trim().email().max(254).optional(),
       role: z.enum(["CHATTER", "SUPERVISOR"]).default("CHATTER"),
       commissionRate: z.number().min(0).max(100).optional(),
       temporaryPassword: z.string().min(12).max(128).optional(),
@@ -219,16 +293,30 @@ router.post("/chatters", authorize("ADMIN"), async (req, res) => {
     req.body,
   );
   const temporaryPassword = input.temporaryPassword ?? crypto.randomBytes(9).toString("base64url");
-  const worker = new Worker({
+  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+  const createWorker = (email: string) => new Worker({
     displayName: input.displayName,
-    email: input.email,
+    email,
     role: input.role,
     ...(input.username !== undefined ? { username: input.username } : {}),
     ...(input.commissionRate !== undefined ? { commissionRate: input.commissionRate } : {}),
-    passwordHash: await bcrypt.hash(temporaryPassword, 12),
+    passwordHash,
     mustChangePassword: true,
   });
-  await worker.save();
+  let worker = createWorker(
+    input.email?.toLowerCase() ?? await nextGeneratedChatterEmail(),
+  );
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await worker.save();
+      break;
+    } catch (error) {
+      if (input.email !== undefined || !isDuplicateEmailError(error) || attempt >= 4) {
+        throw error;
+      }
+      worker = createWorker(await nextGeneratedChatterEmail());
+    }
+  }
   await audit(req, "staff.create", "Worker", worker._id.toString(), null, {
     displayName: worker.displayName,
     email: worker.email,
@@ -279,9 +367,25 @@ router.post("/assignments", authorize("ADMIN"), async (req, res) => {
     }),
     req.body,
   );
+  const modelAccount = await ModelAccount.findOne({
+    _id: input.modelAccountId,
+    active: true,
+    $or: [{ status: "active" }, { status: { $exists: false } }],
+  }).select("_id");
+  if (!modelAccount) throw new HttpError(404, "Active model not found");
+  const workerIds = [...new Set(input.workerIds)];
+  const eligibleWorkers = await Worker.find({
+    _id: { $in: workerIds },
+    role: { $in: ["CHATTER", "worker"] },
+    active: true,
+    suspendedAt: null,
+  }).select("_id").lean();
+  if (eligibleWorkers.length !== workerIds.length) {
+    throw new HttpError(400, "Only active chatters can be assigned to a model");
+  }
   const actorId = req.authenticatedWorker?.id;
   const assignments: unknown[] = [];
-  for (const workerId of input.workerIds) {
+  for (const workerId of workerIds) {
     let existing = await WorkerAssignment.findOne({
       workerId,
       modelAccountId: input.modelAccountId,

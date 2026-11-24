@@ -1,14 +1,22 @@
 package com.example.lovanta;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,24 +42,36 @@ public class AdminActivity extends AppCompatActivity {
     private LinearLayout content;
     private ProgressBar progress;
     private TextView title;
+    private View modelFilters;
+    private EditText modelSearch;
+    private Spinner modelStatusFilter;
     private String currentPage = "Overview";
     private JSONArray cachedModels = new JSONArray();
     private JSONArray cachedChatters = new JSONArray();
+    private int activeRequests;
+    private int pageRequestVersion;
+    private final Handler modelSearchHandler = new Handler(Looper.getMainLooper());
+    private final Runnable modelSearchReload = () -> loadPage("Models");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_admin);
+        ScreenInsets.applyToRoot(this, R.id.adminRoot);
         api = ApiClient.get(this);
         navigation = findViewById(R.id.adminNavigation);
         content = findViewById(R.id.adminContent);
         progress = findViewById(R.id.adminProgress);
         title = findViewById(R.id.tvAdminTitle);
+        modelFilters = findViewById(R.id.modelFilters);
+        modelSearch = findViewById(R.id.adminModelSearch);
+        modelStatusFilter = findViewById(R.id.adminModelStatus);
 
         String role = api.getRole();
         ((TextView) findViewById(R.id.tvAdminRole)).setText(role);
         boolean isAdmin = "ADMIN".equals(role);
         findViewById(R.id.adminActions).setVisibility(isAdmin ? View.VISIBLE : View.GONE);
+        setupModelFilters();
         setupNavigation();
         findViewById(R.id.btnAdminLogout).setOnClickListener(v -> signOut());
         findViewById(R.id.btnCreateModel).setOnClickListener(v -> createModel());
@@ -95,6 +115,7 @@ public class AdminActivity extends AppCompatActivity {
 
     private void updateNavigation() {
         title.setText(currentPage);
+        modelFilters.setVisibility("Models".equals(currentPage) ? View.VISIBLE : View.GONE);
         for (int i = 0; i < navigation.getChildCount(); i++) {
             Button button = (Button) navigation.getChildAt(i);
             boolean selected = currentPage.equals(button.getTag());
@@ -104,16 +125,73 @@ public class AdminActivity extends AppCompatActivity {
     }
 
     private void loadPage(String page) {
+        int requestVersion = ++pageRequestVersion;
+        content.removeAllViews();
+        content.setVisibility(View.INVISIBLE);
         if ("Overview".equals(page)) {
-            api.get("/api/v1/admin/dashboard", callback(result -> renderDashboard(result)));
+            api.get("/api/v1/admin/dashboard", callback(result -> {
+                if (requestVersion == pageRequestVersion) renderDashboard(result);
+            }));
             return;
         }
         String path = "/api/v1/admin/" + routeFor(page) + "?page=1&limit=100";
+        if ("Models".equals(page)) {
+            String search = modelSearch.getText().toString().trim();
+            if (!search.isEmpty()) path += "&search=" + Uri.encode(search);
+            int statusPosition = modelStatusFilter.getSelectedItemPosition();
+            if (statusPosition > 0) {
+                String[] statuses = {"", "active", "inactive", "suspended", "archived"};
+                path += "&status=" + statuses[statusPosition];
+            }
+        }
         api.get(path, callback(result -> {
+            if (requestVersion != pageRequestVersion) return;
             JSONArray records = "Assignments".equals(page)
                     ? result.optJSONArray("assignments") : result.optJSONArray("items");
             renderRecords(page, records);
         }));
+    }
+
+    private void setupModelFilters() {
+        String[] labels = {"All statuses", "Active", "Inactive", "Suspended", "Archived"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, labels);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        modelStatusFilter.setAdapter(adapter);
+        modelSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence value, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable value) {
+                scheduleModelReload();
+            }
+        });
+        modelStatusFilter.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(
+                    AdapterView<?> parent, View view, int position, long id) {
+                scheduleModelReload();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+
+    private void scheduleModelReload() {
+        if (!"Models".equals(currentPage)) return;
+        modelSearchHandler.removeCallbacks(modelSearchReload);
+        modelSearchHandler.postDelayed(modelSearchReload, 300);
+    }
+
+    @Override
+    protected void onDestroy() {
+        modelSearchHandler.removeCallbacks(modelSearchReload);
+        super.onDestroy();
     }
 
     private String routeFor(String page) {
@@ -132,6 +210,7 @@ public class AdminActivity extends AppCompatActivity {
 
     private void renderDashboard(JSONObject data) {
         content.removeAllViews();
+        content.setVisibility(View.VISIBLE);
         addSectionTitle("Operational overview");
         addMetric("Subscribers", data.optString("subscribers", "—"), "Active " + data.optString("activeSubscribers", "—"));
         addMetric("Models", data.optString("models", "—"), "Active " + data.optString("activeModels", "—"));
@@ -155,6 +234,7 @@ public class AdminActivity extends AppCompatActivity {
 
     private void renderItems(String page, JSONArray records) {
         content.removeAllViews();
+        content.setVisibility(View.VISIBLE);
         addSectionTitle(page + " · " + records.length());
         if (records.length() == 0) {
             addText("No " + page.toLowerCase() + " records found.");
@@ -165,6 +245,9 @@ public class AdminActivity extends AppCompatActivity {
             JSONObject row = records.optJSONObject(i);
             if (row == null) continue;
             LinearLayout card = card();
+            if ("Models".equals(page)) {
+                card.setOnClickListener(v -> openModelManagement(row));
+            }
             TextView primary = new TextView(this);
             primary.setText(primaryValue(page, row));
             primary.setTextColor(getResources().getColor(R.color.lovanta_dark));
@@ -212,7 +295,8 @@ public class AdminActivity extends AppCompatActivity {
     private String detailsValue(String page, JSONObject row) {
         switch (page) {
             case "Models":
-                return "@" + row.optString("username", "—") + " · " + row.optString("status", "active")
+                return "Model ID: " + row.optString("modelId", row.optString("_id", "—"))
+                        + "\n@" + row.optString("username", "—") + " · " + row.optString("status", "active")
                         + "\n" + row.optString("description", "");
             case "Chatters":
                 return row.optString("email", "") + " · " + (row.optBoolean("active", false) ? "Active" : "Suspended")
@@ -250,11 +334,25 @@ public class AdminActivity extends AppCompatActivity {
         card.addView(row);
     }
 
+    private void openModelManagement(JSONObject model) {
+        String modelId = model.optString("modelId", model.optString("_id", ""));
+        if (modelId.isEmpty()) {
+            toast("Could not open this model.");
+            return;
+        }
+        Intent intent = new Intent(this, ModelManagementActivity.class);
+        intent.putExtra(ModelManagementActivity.EXTRA_MODEL_ID, modelId);
+        startActivity(intent);
+    }
+
     private void addModelActions(LinearLayout card, JSONObject model) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        Button manage = smallButton("Manage");
+        manage.setOnClickListener(v -> openModelManagement(model));
         Button edit = smallButton("Edit");
         edit.setOnClickListener(v -> editModel(model));
+        row.addView(manage, weightedButton());
         row.addView(edit, weightedButton());
         if (!"archived".equals(model.optString("status"))) {
             Button archive = smallButton("Archive");
@@ -352,24 +450,68 @@ public class AdminActivity extends AppCompatActivity {
     }
 
     private void createChatter() {
+        api.get("/api/v1/admin/models?page=1&limit=100", callback(result -> {
+            cachedModels = result.optJSONArray("items") == null
+                    ? new JSONArray() : result.optJSONArray("items");
+            showCreateChatterForm();
+        }));
+    }
+
+    private void showCreateChatterForm() {
         LinearLayout form = formLayout();
         EditText name = field("Full name");
-        EditText email = field("Staff email");
-        email.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        TextView loginInfo = new TextView(this);
+        loginInfo.setText("Login email and temporary password are generated automatically "
+                + "(chatter1@gmail.com, chatter2@gmail.com, ...).");
+        loginInfo.setTextColor(getResources().getColor(R.color.lovanta_gray));
+        loginInfo.setTextSize(13);
         EditText username = field("Username (optional)");
         EditText commission = field("Commission rate % (optional)");
+        TextView assignmentLabel = new TextView(this);
+        assignmentLabel.setText("Assign to model");
+        assignmentLabel.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        assignmentLabel.setTextSize(14);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        labelParams.topMargin = dp(8);
+        assignmentLabel.setLayoutParams(labelParams);
+
+        List<String> modelIds = new ArrayList<>();
+        List<String> modelOptions = new ArrayList<>();
+        modelIds.add("");
+        modelOptions.add(cachedModels.length() == 0 ? "No models available" : "No assignment");
+        for (int i = 0; i < cachedModels.length(); i++) {
+            JSONObject model = cachedModels.optJSONObject(i);
+            if (model == null || !isModelActive(model)) continue;
+            String id = model.optString("_id", "");
+            if (id.isEmpty()) continue;
+            modelIds.add(id);
+            modelOptions.add(model.optString("displayName", "Model"));
+        }
+        Spinner modelAssignment = new Spinner(this);
+        ArrayAdapter<String> modelAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, modelOptions);
+        modelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        modelAssignment.setAdapter(modelAdapter);
+
         commission.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         form.addView(name);
-        form.addView(email);
+        form.addView(loginInfo);
         form.addView(username);
         form.addView(commission);
-        new AlertDialog.Builder(this).setTitle("Create staff account").setView(form)
+        form.addView(assignmentLabel);
+        form.addView(modelAssignment);
+        new AlertDialog.Builder(this).setTitle("Create chatter account").setView(form)
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Create", (dialog, which) -> {
+                    String staffName = name.getText().toString().trim();
+                    if (staffName.isEmpty()) {
+                        toast("Chatter name is required");
+                        return;
+                    }
                     JSONObject body = new JSONObject();
                     try {
-                        body.put("displayName", name.getText().toString().trim());
-                        body.put("email", email.getText().toString().trim());
+                        body.put("displayName", staffName);
                         body.put("role", "CHATTER");
                         if (!username.getText().toString().trim().isEmpty()) body.put("username", username.getText().toString().trim());
                         if (!commission.getText().toString().trim().isEmpty()) body.put("commissionRate",
@@ -381,13 +523,73 @@ public class AdminActivity extends AppCompatActivity {
                     api.post("/api/v1/admin/chatters", body, callback(result -> {
                         JSONObject chatter = result.optJSONObject("chatter");
                         String password = result.optString("temporaryPassword");
-                        new AlertDialog.Builder(this)
-                                .setTitle("Staff account created")
-                                .setMessage("Share this temporary password securely. It will not be shown again:\n\n" + password)
-                                .setPositiveButton("Done", (d, w) -> loadPage("Chatters"))
-                                .show();
+                        String chatterEmail = chatter == null ? "" : chatter.optString("email", "");
+                        if (chatterEmail.isEmpty() || password.isEmpty()) {
+                            toast("Account may have been created, but login details were not returned. "
+                                    + "Check Chatters and reset the password if needed.");
+                            loadPage("Chatters");
+                            return;
+                        }
+                        String chatterId = chatter.optString("id", "");
+                        int selectedModel = modelAssignment.getSelectedItemPosition();
+                        String modelId = selectedModel >= 0 && selectedModel < modelIds.size()
+                                ? modelIds.get(selectedModel) : "";
+                        String modelName = selectedModel >= 0 && selectedModel < modelOptions.size()
+                                ? modelOptions.get(selectedModel) : "";
+                        if (modelId.isEmpty()) {
+                            showCreatedChatter(chatterEmail, password, "", null);
+                            loadPage("Chatters");
+                            return;
+                        }
+                        if (chatterId.isEmpty()) {
+                            showCreatedChatter(chatterEmail, password, modelName,
+                                    "The server did not return the new chatter ID.");
+                            loadPage("Chatters");
+                            return;
+                        }
+                        JSONObject assignment = new JSONObject();
+                        try {
+                            assignment.put("modelAccountId", modelId);
+                            assignment.put("workerIds", new JSONArray().put(chatterId));
+                        } catch (JSONException error) {
+                            showCreatedChatter(chatterEmail, password, modelName,
+                                    "Could not prepare the assignment request.");
+                            loadPage("Chatters");
+                            return;
+                        }
+                        api.post("/api/v1/admin/assignments", assignment,
+                                callback(assigned -> {
+                                    showCreatedChatter(chatterEmail, password, modelName, null);
+                                    loadPage("Chatters");
+                                }, error -> {
+                                    showCreatedChatter(chatterEmail, password, modelName, error);
+                                    loadPage("Chatters");
+                                }));
                     }));
                 }).show();
+    }
+
+    private void showCreatedChatter(
+            String email, String password, String assignedModel, String assignmentError) {
+        StringBuilder message = new StringBuilder();
+        message.append("Email: ").append(email)
+                .append("\nTemporary password: ").append(password);
+        if (assignmentError != null) {
+            message.append("\n\nAccount created, but automatic assignment to ")
+                    .append(assignedModel)
+                    .append(" failed: ").append(assignmentError)
+                    .append("\nYou can assign this chatter later.");
+        } else if (!assignedModel.isEmpty()) {
+            message.append("\nAssigned to: ").append(assignedModel);
+        } else {
+            message.append("\nNot assigned to a model yet.");
+        }
+        message.append("\n\nSave these login details now; the password will not be shown again.");
+        new AlertDialog.Builder(this)
+                .setTitle("Chatter account created")
+                .setMessage(message.toString())
+                .setPositiveButton("Done", null)
+                .show();
     }
 
     private void beginAssignment() {
@@ -401,22 +603,35 @@ public class AdminActivity extends AppCompatActivity {
     }
 
     private void chooseModelForAssignment() {
-        if (cachedModels.length() == 0 || cachedChatters.length() == 0) {
-            toast("Create at least one model and one chatter first");
+        List<JSONObject> eligibleModels = new ArrayList<>();
+        for (int i = 0; i < cachedModels.length(); i++) {
+            JSONObject model = cachedModels.optJSONObject(i);
+            if (model != null && isModelActive(model)) eligibleModels.add(model);
+        }
+        if (eligibleModels.isEmpty() || cachedChatters.length() == 0) {
+            toast("An active model and an active chatter are required");
             return;
         }
-        String[] names = new String[cachedModels.length()];
-        for (int i = 0; i < cachedModels.length(); i++) names[i] = cachedModels.optJSONObject(i).optString("displayName");
+        String[] names = new String[eligibleModels.size()];
+        for (int i = 0; i < eligibleModels.size(); i++) {
+            names[i] = eligibleModels.get(i).optString("displayName");
+        }
         new AlertDialog.Builder(this).setTitle("Choose model")
-                .setItems(names, (dialog, index) -> chooseChatters(index))
+                .setItems(names, (dialog, index) -> chooseChatters(eligibleModels.get(index)))
                 .setNegativeButton("Cancel", null).show();
     }
 
-    private void chooseChatters(int modelIndex) {
+    private void chooseChatters(JSONObject model) {
         List<JSONObject> eligible = new ArrayList<>();
         for (int i = 0; i < cachedChatters.length(); i++) {
             JSONObject staff = cachedChatters.optJSONObject(i);
-            if (staff != null && staff.optBoolean("active", false)) eligible.add(staff);
+            if (staff != null && staff.optBoolean("active", false) && isChatter(staff)) {
+                eligible.add(staff);
+            }
+        }
+        if (eligible.isEmpty()) {
+            toast("No active chatters are available");
+            return;
         }
         String[] names = new String[eligible.size()];
         boolean[] selected = new boolean[eligible.size()];
@@ -433,7 +648,7 @@ public class AdminActivity extends AppCompatActivity {
                     }
                     JSONObject body = new JSONObject();
                     try {
-                        body.put("modelAccountId", cachedModels.optJSONObject(modelIndex).optString("_id"));
+                        body.put("modelAccountId", model.optString("_id"));
                         body.put("workerIds", workerIds);
                     } catch (JSONException error) {
                         toast("Could not prepare assignment");
@@ -471,26 +686,55 @@ public class AdminActivity extends AppCompatActivity {
                 cachedChatters = result.optJSONArray("items") == null ? new JSONArray() : result.optJSONArray("items")));
     }
 
+    private boolean isModelActive(JSONObject model) {
+        String status = model.optString("status", "active");
+        return model.optBoolean("active", true)
+                && ("active".equals(status) || status.isEmpty());
+    }
+
+    private boolean isChatter(JSONObject staff) {
+        String role = staff.optString("role", "");
+        return "CHATTER".equals(role) || "worker".equals(role);
+    }
+
     private ApiClient.Callback callback(java.util.function.Consumer<JSONObject> onSuccess) {
+        return callback(onSuccess, message -> {
+            if (!api.hasSession()) {
+                startActivity(new Intent(AdminActivity.this, LoginActivity.class));
+                finish();
+            } else {
+                Toast.makeText(AdminActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private ApiClient.Callback callback(
+            java.util.function.Consumer<JSONObject> onSuccess,
+            java.util.function.Consumer<String> onError) {
+        activeRequests++;
         progress.setVisibility(View.VISIBLE);
         return new ApiClient.Callback() {
             @Override
             public void onSuccess(JSONObject result) {
-                progress.setVisibility(View.GONE);
+                finishRequest();
                 onSuccess.accept(result);
             }
 
             @Override
             public void onError(String message) {
-                progress.setVisibility(View.GONE);
-                if (!api.hasSession()) {
-                    startActivity(new Intent(AdminActivity.this, LoginActivity.class));
-                    finish();
-                } else {
-                    Toast.makeText(AdminActivity.this, message, Toast.LENGTH_LONG).show();
+                finishRequest();
+                if (content.getVisibility() == View.INVISIBLE) {
+                    content.setVisibility(View.VISIBLE);
+                    addText(message);
                 }
+                onError.accept(message);
             }
         };
+    }
+
+    private void finishRequest() {
+        activeRequests = Math.max(0, activeRequests - 1);
+        progress.setVisibility(activeRequests == 0 ? View.GONE : View.VISIBLE);
     }
 
     private void signOut() {

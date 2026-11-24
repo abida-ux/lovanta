@@ -2,11 +2,8 @@ package com.example.lovanta;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ProgressBar;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -17,8 +14,6 @@ public class LoginActivity extends AppCompatActivity {
     private EditText emailInput;
     private EditText passwordInput;
     private Button signInButton;
-    private ProgressBar progress;
-    private TextView errorText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,16 +22,10 @@ public class LoginActivity extends AppCompatActivity {
         emailInput = findViewById(R.id.etEmail);
         passwordInput = findViewById(R.id.etPassword);
         signInButton = findViewById(R.id.btnSignIn);
-        progress = findViewById(R.id.loginProgress);
-        errorText = findViewById(R.id.tvLoginError);
 
         ApiClient api = ApiClient.get(this);
         if (api.hasSession()) {
-            if (api.mustChangePassword()) {
-                startActivity(new Intent(this, ChangePasswordActivity.class));
-            } else {
-                openRoleHome(api.getRole());
-            }
+            openRoleHome(api.getRole());
             finish();
             return;
         }
@@ -47,8 +36,7 @@ public class LoginActivity extends AppCompatActivity {
         String email = emailInput.getText().toString().trim();
         String password = passwordInput.getText().toString();
         if (email.isEmpty() || password.isEmpty()) {
-            errorText.setText("Enter your staff email and password.");
-            errorText.setVisibility(View.VISIBLE);
+            Toast.makeText(this, "Enter your email or username and password.", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -59,7 +47,7 @@ public class LoginActivity extends AppCompatActivity {
                 JSONObject worker = result.optJSONObject("worker");
                 if (worker == null || result.optString("token").isEmpty()) {
                     setLoading(false);
-                    showError("The server returned an invalid sign-in response.");
+                    showError("Unable to sign in. Please try again.");
                     return;
                 }
                 String role = worker.optString("role", "");
@@ -67,13 +55,8 @@ public class LoginActivity extends AppCompatActivity {
                         result.optString("token"),
                         worker.optString("id"),
                         role,
-                        result.optBoolean("mustChangePassword")
+                        false
                 );
-                if (result.optBoolean("mustChangePassword")) {
-                    startActivity(new Intent(LoginActivity.this, ChangePasswordActivity.class));
-                    finish();
-                    return;
-                }
                 openRoleHome(role);
             }
 
@@ -93,12 +76,11 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void setLoading(boolean loading) {
-        progress.setVisibility(loading ? View.VISIBLE : View.GONE);
         signInButton.setEnabled(!loading);
+        signInButton.setText(loading ? "Logging in..." : "Log in");
     }
 
     private void showError(String message) {
-        errorText.setText(message);
-        errorText.setVisibility(View.VISIBLE);
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 }

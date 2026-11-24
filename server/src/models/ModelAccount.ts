@@ -19,4 +19,6 @@ const modelAccountSchema = new Schema(
   { timestamps: true },
 );
 
+modelAccountSchema.index({ status: 1, createdAt: -1 });
+
 export const ModelAccount = model("ModelAccount", modelAccountSchema);

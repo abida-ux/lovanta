@@ -11,9 +11,8 @@ This Express API is the server-side boundary between the Android chatter app, th
 
 The `.env` file is local-only and must not be committed. A MongoDB replica set is required for the transactional message-send endpoint.
 
-## Initial API
+## Chatter workspace API
 
-- `POST /api/v1/auth/login` — authenticate an active worker and receive a 12-hour bearer token.
 - `GET /api/v1/auth/me` — return the authenticated worker.
 - `GET /api/v1/models` — list model accounts assigned to that worker.
 - `GET /api/v1/models/:modelAccountId/conversations` — list active conversations for an assigned account.
@@ -23,23 +22,35 @@ The `.env` file is local-only and must not be committed. A MongoDB replica set i
 
 ## Staff and admin API
 
-- `POST /api/staff/auth/login` — centralized staff login; returns role permissions and redirect.
+- `POST /api/staff/auth/login` — the single staff login endpoint for administrators, supervisors, and chatters; accepts an email or username and returns the database-derived role, permissions, and redirect.
 - `POST /api/staff/auth/logout` — end the current bearer session.
 - `POST /api/staff/auth/password/change` — change the authenticated staff password.
 - `GET /api/v1/admin/dashboard` — real MongoDB overview metrics.
-- `/api/v1/admin/models` — model management.
+- `/api/v1/admin/models` — model management, including name/username/Model ID search and status filtering. MongoDB `_id` is the permanent Model ID; responses also expose it as `modelId`.
+- `GET /api/v1/admin/models/:id` — model profile and active chatter assignments.
 - `/api/v1/admin/chatters` — staff account management.
 - `/api/v1/admin/assignments` — model-to-chatter assignments.
 - `/api/v1/admin/subscribers`, `/conversations`, `/ppv`, `/transactions`, `/commissions`, `/audit` — management and reporting.
 - `GET /api/v1/admin/reports/:type.csv` — CSV export for supported report types.
 
-The shared Android app uses `API_BASE_URL` as a Gradle property. The default debug URL
-is `http://10.0.2.2:4000` for an Android emulator connecting to a local API; use the
-deployed HTTPS API URL when building for a device or release.
+Admin-only chatter creation generates the next available `chatterN@gmail.com` login
+and a temporary password when no email is provided. These generated addresses are
+application login identifiers, not newly created Gmail mailboxes. The Android
+creation form can assign the chatter to a selected model and displays the credentials
+once after creation.
+
+The model-management screen supports existing profile fields, status changes, public
+gallery URL management, and chatter assignments. Media file uploads and protected
+private-media delivery are not available until durable media storage is configured.
+
+The shared Android app uses `API_BASE_URL` as a Gradle property. Its default is the
+deployed Render HTTPS API URL; set the property at build time to target another
+environment.
 
 To create the first administrator, set `BOOTSTRAP_ADMIN_EMAIL` in the server
 environment, then run `npm run admin:bootstrap` from `server`. It creates a random
 temporary password, prints it once, and requires a password change on first sign-in.
 The command does nothing if an admin already exists.
 
-Worker and assignment provisioning is intentionally not exposed as public registration. It should be added as an admin-only workflow after the first trusted admin is provisioned.
+Worker and assignment provisioning is restricted to authenticated administrators;
+there is no public staff registration.

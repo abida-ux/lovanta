@@ -22,7 +22,7 @@ android {
         resValue(
             "string",
             "api_base_url",
-            providers.gradleProperty("API_BASE_URL").getOrElse("http://10.0.2.2:4000")
+            providers.gradleProperty("API_BASE_URL").getOrElse("https://lovanta1.onrender.com")
         )
     }
 

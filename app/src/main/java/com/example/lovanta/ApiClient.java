@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -14,11 +15,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import javax.net.ssl.SSLException;
 
 public final class ApiClient {
     public interface Callback {
@@ -32,6 +37,7 @@ public final class ApiClient {
     }
 
     private static final String PREFS = "lovanta_session";
+    private static final String TAG = "LovantaApi";
     private static final String TOKEN = "token";
     private static final String WORKER_ID = "worker_id";
     private static final String ROLE = "role";
@@ -39,6 +45,19 @@ public final class ApiClient {
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(3);
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static ApiClient instance;
+
+    private static final class ApiResponseException extends IOException {
+        private final int statusCode;
+        private final String endpoint;
+        private final String serverMessage;
+
+        private ApiResponseException(int statusCode, String endpoint, String serverMessage) {
+            super("HTTP " + statusCode);
+            this.statusCode = statusCode;
+            this.endpoint = endpoint;
+            this.serverMessage = serverMessage;
+        }
+    }
 
     private final Context appContext;
     private final String baseUrl;
@@ -171,7 +190,7 @@ public final class ApiClient {
                 JSONObject response = request(method, path, body);
                 MAIN.post(() -> callback.onSuccess(response));
             } catch (Exception error) {
-                postError(callback, messageFor(error));
+                postError(callback, messageFor(error, method, path));
             }
         });
     }
@@ -185,35 +204,55 @@ public final class ApiClient {
     }
 
     private JSONObject request(String method, String path, JSONObject body) throws IOException, JSONException {
-        HttpURLConnection connection = (HttpURLConnection) new URL(baseUrl + path).openConnection();
-        connection.setRequestMethod(method);
-        connection.setConnectTimeout(12000);
-        connection.setReadTimeout(15000);
-        connection.setRequestProperty("Accept", "application/json");
-        String token = getToken();
-        if (token != null) connection.setRequestProperty("Authorization", "Bearer " + token);
-        if (body != null) {
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            byte[] data = body.toString().getBytes(StandardCharsets.UTF_8);
-            try (OutputStream output = connection.getOutputStream()) {
-                output.write(data);
+        String endpoint = baseUrl + path;
+        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        try {
+            connection.setRequestMethod(method);
+            connection.setConnectTimeout(12000);
+            connection.setReadTimeout(15000);
+            connection.setRequestProperty("Accept", "application/json");
+            String token = getToken();
+            if (token != null) connection.setRequestProperty("Authorization", "Bearer " + token);
+            if (body != null) {
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                byte[] data = body.toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream output = connection.getOutputStream()) {
+                    output.write(data);
+                }
             }
-        }
 
-        int status = connection.getResponseCode();
-        InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-        String responseText = readAll(stream);
-        connection.disconnect();
-        JSONObject result = responseText.isEmpty() ? new JSONObject() : new JSONObject(responseText);
-        if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
-            clearSession();
-            throw new IOException("Session expired. Please sign in again.");
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            String responseText = readAll(stream);
+            if (status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                clearSession();
+            }
+            if (status < 200 || status >= 300) {
+                String detail = errorFrom(responseText);
+                throw new ApiResponseException(status, endpoint, detail);
+            }
+            try {
+                return responseText.isEmpty() ? new JSONObject() : new JSONObject(responseText);
+            } catch (JSONException error) {
+                throw new IOException(
+                        "Invalid JSON response from " + method + " " + endpoint
+                                + " (HTTP " + status + ")",
+                        error
+                );
+            }
+        } finally {
+            connection.disconnect();
         }
-        if (status < 200 || status >= 300) {
-            throw new IOException(result.optString("error", "Request failed (" + status + ")"));
+    }
+
+    private String errorFrom(String responseText) {
+        if (responseText.isEmpty()) return "";
+        try {
+            return new JSONObject(responseText).optString("error", "");
+        } catch (JSONException ignored) {
+            return "";
         }
-        return result;
     }
 
     private String readAll(InputStream stream) throws IOException {
@@ -236,7 +275,49 @@ public final class ApiClient {
     }
 
     private String messageFor(Exception error) {
-        String message = error.getMessage();
-        return message == null || message.trim().isEmpty() ? "Unable to reach the server" : message;
+        Log.e(TAG, "API request failed", error);
+        return friendlyMessage(error, null, null);
+    }
+
+    private String messageFor(Exception error, String method, String path) {
+        Log.e(TAG, "API request failed: " + method + " " + path, error);
+        return friendlyMessage(error, method, path);
+    }
+
+    private String friendlyMessage(Exception error, String method, String path) {
+        if (error instanceof ApiResponseException) {
+            ApiResponseException response = (ApiResponseException) error;
+            Log.w(TAG, "Server response " + response.statusCode + " from " + response.endpoint
+                    + (response.serverMessage.isEmpty() ? "" : ": " + response.serverMessage));
+            if (response.statusCode == 401) {
+                boolean loginRequest = "POST".equals(method)
+                        && path != null && path.startsWith("/api/staff/auth/login");
+                return loginRequest
+                        ? "Invalid email or password."
+                        : "Your session has expired. Please sign in again.";
+            }
+            if (response.statusCode == 403) return "You don't have permission to access this page.";
+            if (response.statusCode == 404) return "The requested information could not be found.";
+            if (response.statusCode == 423) return "This account is temporarily locked. Try again later.";
+            if (response.statusCode == 429) return "Too many attempts. Please wait and try again.";
+            if (response.statusCode >= 500) return "The service is temporarily unavailable. Please try again.";
+            if (response.statusCode == 400 || response.statusCode == 409) {
+                return "Please check the information and try again.";
+            }
+            return "Unable to complete the request. Please try again.";
+        }
+        if (error instanceof SocketTimeoutException) {
+            return "The request timed out. Check your connection and try again.";
+        }
+        if (error instanceof UnknownHostException) {
+            return "Unable to connect. Check your internet connection and try again.";
+        }
+        if (error instanceof SSLException) {
+            return "A secure connection could not be established. Please try again.";
+        }
+        if (error instanceof ConnectException) {
+            return "Unable to reach the service. Check your connection and try again.";
+        }
+        return "Unable to complete the request. Please try again.";
     }
 }
