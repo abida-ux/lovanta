@@ -47,7 +47,12 @@ export const authenticateWorker: RequestHandler = async (req, res, next) => {
     return;
   }
 
-  const worker = await Worker.findOne({ _id: payload.sub, active: true, suspendedAt: null })
+  const worker = await Worker.findOne({
+    _id: payload.sub,
+    active: true,
+    suspendedAt: null,
+    status: { $in: ["ACTIVE", null] },
+  })
     .select("_id email displayName role tokenVersion")
     .lean();
 

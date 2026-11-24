@@ -29,7 +29,9 @@ router.post("/login", loginRateLimit, async (req, res) => {
   const identifier = input.email.toLowerCase();
   const worker = await Worker.findOne({ email: identifier }).select("+passwordHash")
     ?? await Worker.findOne({ username: identifier }).select("+passwordHash");
-  if (!worker || !worker.active || worker.suspendedAt) {
+  const accountStatus = worker?.status
+    ?? (worker?.active && !worker.suspendedAt ? "ACTIVE" : "DISABLED");
+  if (!worker || !worker.active || worker.suspendedAt || accountStatus !== "ACTIVE") {
     throw new HttpError(401, "Email or password is incorrect");
   }
   if (worker.lockedUntil && worker.lockedUntil > new Date()) {

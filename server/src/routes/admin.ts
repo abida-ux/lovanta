@@ -16,7 +16,9 @@ import { Subscriber } from "../models/Subscriber.ts";
 import { Transaction } from "../models/Transaction.ts";
 import { Worker } from "../models/Worker.ts";
 import { WorkerAssignment } from "../models/WorkerAssignment.ts";
+import { Sequence } from "../models/Sequence.ts";
 import { HttpError } from "../errors/HttpError.ts";
+import { generateStrongPassword } from "../utils/generateStrongPassword.ts";
 import { parseInput } from "../utils/parseInput.ts";
 
 const router = Router();
@@ -31,6 +33,15 @@ const modelListSchema = paginationSchema.extend({
   status: z.enum(["active", "inactive", "suspended", "archived"]).optional(),
 });
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i);
+const CHATTER_SEQUENCE_ID = "chatter-login";
+const CHATTER_EMAIL_PATTERN = /^chatter(\d+)@gmail\.com$/i;
+const CHATTER_PROFILE_FIELDS =
+  "email displayName role status active suspendedAt createdAt lastLoginAt createdBy disabledAt disabledReason bannedAt banReason archivedAt";
+
+type AuditDetails = {
+  chatterId?: string;
+  reason?: string;
+};
 
 async function audit(
   req: Request,
@@ -39,15 +50,18 @@ async function audit(
   affectedId: string,
   before: unknown = null,
   after: unknown = null,
+  details: AuditDetails = {},
 ) {
   const worker = req.authenticatedWorker;
   if (!worker) return;
   await AuditLog.create({
     actorId: worker.id,
     actorRole: worker.role,
+    chatterId: details.chatterId ?? null,
     action,
     affectedType,
     affectedId,
+    reason: details.reason ?? "",
     before,
     after,
     ipAddress: req.ip ?? "",
@@ -60,12 +74,14 @@ router.get("/dashboard", authorizePermission("dashboard.read"), async (_req, res
     subscribers,
     activeSubscribers,
     models,
+    totalModels,
     activeModels,
     chatters,
     conversations,
     activeConversations,
     ppvMessages,
     ppvPurchases,
+    paidPpvPurchases,
     successfulTransactions,
     pendingTransactions,
     refunds,
@@ -73,12 +89,14 @@ router.get("/dashboard", authorizePermission("dashboard.read"), async (_req, res
     Subscriber.countDocuments(),
     Subscriber.countDocuments({ status: "active" }),
     ModelAccount.countDocuments({ status: { $ne: "archived" } }),
+    ModelAccount.countDocuments(),
     ModelAccount.countDocuments({ active: true, status: { $ne: "archived" } }),
     Worker.countDocuments({ role: { $in: ["CHATTER", "worker"] } }),
     Conversation.countDocuments(),
     Conversation.countDocuments({ status: "active" }),
     ChatMessage.countDocuments({ senderType: "chatter" }),
     PPVPurchase.countDocuments(),
+    PPVPurchase.countDocuments({ status: "paid" }),
     Transaction.countDocuments({ status: "successful" }),
     Transaction.countDocuments({ status: "pending" }),
     Transaction.countDocuments({ status: "refunded" }),
@@ -94,17 +112,75 @@ router.get("/dashboard", authorizePermission("dashboard.read"), async (_req, res
       { $match: { status, createdAt: { $gte: from } } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]))[0]?.total ?? 0;
+  const [
+    activeChatters,
+    disabledAccounts,
+    recentRecruitment,
+    recentActions,
+    commissionTotals,
+  ] = await Promise.all([
+    Worker.countDocuments({
+      role: { $in: ["CHATTER", "worker"] },
+      active: true,
+      suspendedAt: null,
+      status: { $in: ["ACTIVE", null] },
+    }),
+    Worker.countDocuments({
+      role: { $in: ["CHATTER", "worker"] },
+      $or: [
+        { status: "DISABLED" },
+        { status: "ACTIVE", $or: [{ active: false }, { suspendedAt: { $ne: null } }] },
+        { status: { $exists: false }, $or: [{ active: false }, { suspendedAt: { $ne: null } }] },
+      ],
+    }),
+    Worker.find({ role: { $in: ["CHATTER", "worker"] } })
+      .select("displayName email status active suspendedAt createdAt")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+    AuditLog.find()
+      .select("actorId chatterId action affectedType affectedId reason createdAt")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean(),
+    Commission.aggregate([
+      { $group: { _id: "$status", amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+    ]),
+  ]);
+  const commissionByStatus = new Map(commissionTotals.map((row) => [row._id, row]));
 
   res.json({
     subscribers,
     activeSubscribers,
     models,
+    totalModels,
     activeModels,
     chatters,
+    totalChatters: chatters,
+    activeChatters,
+    disabledAccounts,
+    recentRecruitment: recentRecruitment.map((chatter) => ({
+      id: chatter._id.toString(),
+      displayName: chatter.displayName,
+      email: chatter.email,
+      status: chatterStatus(chatter),
+      createdAt: chatter.createdAt,
+    })),
+    recentActions: recentActions.map((entry) => ({
+      id: entry._id.toString(),
+      adminId: entry.actorId.toString(),
+      chatterId: entry.chatterId?.toString() ?? null,
+      action: entry.action,
+      affectedType: entry.affectedType,
+      affectedId: entry.affectedId,
+      reason: entry.reason,
+      createdAt: entry.createdAt,
+    })),
     conversations,
     activeConversations,
     ppvMessages,
     ppvPurchases,
+    paidPpvPurchases,
     totalRevenue: await sumByStatusAndDate("successful", new Date(0)),
     revenueToday: await sumByStatusAndDate("successful", startOfDay),
     revenueWeek: await sumByStatusAndDate("successful", startOfWeek),
@@ -112,6 +188,8 @@ router.get("/dashboard", authorizePermission("dashboard.read"), async (_req, res
     pendingTransactions,
     successfulTransactions,
     refunds,
+    paidCommissions: commissionByStatus.get("paid")?.amount ?? 0,
+    pendingCommissions: commissionByStatus.get("pending")?.amount ?? 0,
   });
 });
 
@@ -237,32 +315,60 @@ router.patch("/models/:id", authorize("ADMIN"), async (req, res) => {
   res.json({ model: modelAccount, modelId: modelAccount._id.toString() });
 });
 
-router.get("/chatters", authorizePermission("chatters.read"), async (req, res) => {
-  const { page, limit, search } = parseInput(paginationSchema, req.query);
-  const filter: Record<string, unknown> = { role: { $in: ["CHATTER", "SUPERVISOR", "worker"] } };
-  if (search) {
-    filter.$or = [
-      { displayName: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
-      { username: { $regex: search, $options: "i" } },
-    ];
-  }
-  const [items, total] = await Promise.all([
-    Worker.find(filter).select("-passwordHash").sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-    Worker.countDocuments(filter),
-  ]);
-  res.json({ items, total, page, limit });
+const chatterListSchema = paginationSchema.extend({
+  status: z.enum(["ACTIVE", "DISABLED", "BANNED", "ARCHIVED"]).optional(),
 });
 
-async function nextGeneratedChatterEmail(): Promise<string> {
-  const accounts = await Worker.find({ email: /^chatter\d+@gmail\.com$/i })
-    .select("email")
-    .lean();
+function chatterStatus(worker: {
+  status?: string;
+  active?: boolean;
+  suspendedAt?: Date | null;
+}): "ACTIVE" | "DISABLED" | "BANNED" | "ARCHIVED" {
+  if (worker.status === "BANNED" || worker.status === "ARCHIVED") return worker.status;
+  if (worker.status === "DISABLED" || worker.active === false || worker.suspendedAt) {
+    return "DISABLED";
+  }
+  return "ACTIVE";
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "code" in error
+    && error.code === 11000;
+}
+
+async function initializeChatterSequence(): Promise<void> {
+  if (await Sequence.exists({ _id: CHATTER_SEQUENCE_ID })) return;
+
+  const accounts = await Worker.find({ email: CHATTER_EMAIL_PATTERN }).select("email").lean();
   const highestNumber = accounts.reduce((highest, account) => {
-    const match = /^chatter(\d+)@gmail\.com$/i.exec(account.email);
+    const match = CHATTER_EMAIL_PATTERN.exec(account.email);
     return match ? Math.max(highest, Number(match[1])) : highest;
   }, 0);
-  return `chatter${highestNumber + 1}@gmail.com`;
+
+  try {
+    await Sequence.create({ _id: CHATTER_SEQUENCE_ID, value: highestNumber });
+  } catch (error) {
+    if (!isDuplicateKeyError(error)) throw error;
+  }
+}
+
+async function nextGeneratedChatterLogin(): Promise<{ email: string; number: number }> {
+  await initializeChatterSequence();
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const sequence = await Sequence.findOneAndUpdate(
+      { _id: CHATTER_SEQUENCE_ID },
+      { $inc: { value: 1 } },
+      { new: true },
+    ).lean();
+    if (!sequence) throw new Error("Chatter login sequence could not be advanced");
+
+    const email = `chatter${sequence.value}@gmail.com`;
+    if (await Worker.exists({ email })) continue;
+    return { email, number: sequence.value };
+  }
+  throw new HttpError(503, "Unable to allocate a unique chatter login");
 }
 
 function isDuplicateEmailError(error: unknown): boolean {
@@ -280,82 +386,493 @@ function isDuplicateEmailError(error: unknown): boolean {
     && "email" in duplicateKey;
 }
 
-router.post("/chatters", authorize("ADMIN"), async (req, res) => {
-  const input = parseInput(
-    z.object({
-      displayName: z.string().trim().min(1).max(100),
-      username: z.string().trim().min(1).max(100).optional(),
-      email: z.string().trim().email().max(254).optional(),
-      role: z.enum(["CHATTER", "SUPERVISOR"]).default("CHATTER"),
-      commissionRate: z.number().min(0).max(100).optional(),
-      temporaryPassword: z.string().min(12).max(128).optional(),
-    }),
-    req.body,
-  );
-  const temporaryPassword = input.temporaryPassword ?? crypto.randomBytes(9).toString("base64url");
-  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
-  const createWorker = (email: string) => new Worker({
-    displayName: input.displayName,
-    email,
-    role: input.role,
-    ...(input.username !== undefined ? { username: input.username } : {}),
-    ...(input.commissionRate !== undefined ? { commissionRate: input.commissionRate } : {}),
-    passwordHash,
-    mustChangePassword: true,
+router.get("/chatters", authorizePermission("chatters.read"), async (req, res) => {
+  const { page, limit, search, status } = parseInput(chatterListSchema, req.query);
+  const conditions: Record<string, unknown>[] = [
+    { role: { $in: ["CHATTER", "worker"] } },
+  ];
+  if (search) {
+    const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const searchConditions: Record<string, unknown>[] = [
+      { displayName: { $regex: escapedSearch, $options: "i" } },
+      { email: { $regex: escapedSearch, $options: "i" } },
+    ];
+    if (/^[a-f\d]{24}$/i.test(search)) {
+      searchConditions.push({ _id: new Types.ObjectId(search) });
+    }
+    conditions.push({ $or: searchConditions });
+  }
+  if (status === "ACTIVE") {
+    conditions.push({
+      $or: [
+        { status: "ACTIVE", active: true, suspendedAt: null },
+        { status: { $exists: false }, active: true, suspendedAt: null },
+      ],
+    });
+  } else if (status === "DISABLED") {
+    conditions.push({
+      $or: [
+        { status: "DISABLED" },
+        {
+          status: "ACTIVE",
+          $or: [{ active: false }, { suspendedAt: { $ne: null } }],
+        },
+        {
+          status: { $exists: false },
+          $or: [{ active: false }, { suspendedAt: { $ne: null } }],
+        },
+      ],
+    });
+  } else if (status) {
+    conditions.push({ status });
+  }
+
+  const filter = { $and: conditions };
+  const [items, total] = await Promise.all([
+    Worker.find(filter).select(CHATTER_PROFILE_FIELDS)
+      .sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Worker.countDocuments(filter),
+  ]);
+  const assignments = items.length > 0
+    ? await WorkerAssignment.find({
+      workerId: { $in: items.map((item) => item._id) },
+      active: true,
+    }).select("workerId modelAccountId assignedAt").lean()
+    : [];
+  const modelIds = [...new Set(assignments.map((assignment) => assignment.modelAccountId.toString()))];
+  const models = modelIds.length > 0
+    ? await ModelAccount.find({ _id: { $in: modelIds } }).select("displayName").lean()
+    : [];
+  const modelNames = new Map(models.map((modelAccount) => [
+    modelAccount._id.toString(),
+    modelAccount.displayName,
+  ]));
+  const assignmentsByChatter = new Map<string, Array<{ id: string; modelId: string; modelName: string }>>();
+  for (const assignment of assignments) {
+    const chatterId = assignment.workerId.toString();
+    const modelId = assignment.modelAccountId.toString();
+    const list = assignmentsByChatter.get(chatterId) ?? [];
+    list.push({
+      id: assignment._id.toString(),
+      modelId,
+      modelName: modelNames.get(modelId) ?? "Model",
+    });
+    assignmentsByChatter.set(chatterId, list);
+  }
+  res.json({
+    items: items.map((item) => ({
+      ...item,
+      status: chatterStatus(item),
+      assignedModels: assignmentsByChatter.get(item._id.toString()) ?? [],
+    })),
+    total,
+    page,
+    limit,
   });
-  let worker = createWorker(
-    input.email?.toLowerCase() ?? await nextGeneratedChatterEmail(),
-  );
-  for (let attempt = 0; ; attempt++) {
+});
+
+router.post("/chatters", authorize("ADMIN"), async (req, res) => {
+  parseInput(z.object({}), req.body);
+  const adminId = req.authenticatedWorker?.id;
+  if (!adminId) throw new HttpError(401, "Authentication required");
+
+  const temporaryPassword = generateStrongPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+  let created: {
+    id: string;
+    email: string;
+    displayName: string;
+    createdAt: Date;
+  } | undefined;
+
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const login = await nextGeneratedChatterLogin();
+    const worker = new Worker({
+      displayName: `Chatter ${login.number}`,
+      email: login.email,
+      role: "CHATTER",
+      status: "ACTIVE",
+      active: true,
+      createdBy: adminId,
+      passwordHash,
+      mustChangePassword: false,
+    });
     try {
       await worker.save();
+      created = {
+        id: worker._id.toString(),
+        email: worker.email,
+        displayName: worker.displayName,
+        createdAt: worker.createdAt,
+      };
       break;
     } catch (error) {
-      if (input.email !== undefined || !isDuplicateEmailError(error) || attempt >= 4) {
-        throw error;
-      }
-      worker = createWorker(await nextGeneratedChatterEmail());
+      if (!isDuplicateEmailError(error)) throw error;
     }
   }
-  await audit(req, "staff.create", "Worker", worker._id.toString(), null, {
-    displayName: worker.displayName,
-    email: worker.email,
-    role: worker.role,
-  });
+  if (!created) throw new HttpError(503, "Unable to create a unique chatter login");
+
+  await audit(
+    req,
+    "chatter.created",
+    "Worker",
+    created.id,
+    null,
+    { email: created.email, role: "CHATTER", status: "ACTIVE" },
+    { chatterId: created.id },
+  );
   res.status(201).json({
-    chatter: { id: worker._id, displayName: worker.displayName, email: worker.email, role: worker.role },
+    chatter: {
+      id: created.id,
+      displayName: created.displayName,
+      email: created.email,
+      role: "CHATTER",
+      status: "ACTIVE",
+      createdAt: created.createdAt,
+      assignedModels: [],
+    },
     temporaryPassword,
   });
 });
 
+router.get("/chatters/:id", authorize("ADMIN"), async (req, res) => {
+  const id = parseInput(objectIdSchema, req.params.id);
+  const chatter = await Worker.findOne({
+    _id: id,
+    role: { $in: ["CHATTER", "worker"] },
+  }).select(CHATTER_PROFILE_FIELDS).lean();
+  if (!chatter) throw new HttpError(404, "Chatter account not found");
+
+  const [assignments, history] = await Promise.all([
+    WorkerAssignment.find({ workerId: id, active: true })
+      .select("modelAccountId assignedAt")
+      .sort({ assignedAt: -1 })
+      .lean(),
+    AuditLog.find({
+      $or: [
+        { chatterId: id },
+        { affectedType: "Worker", affectedId: id },
+      ],
+    })
+      .select("actorId action affectedId reason createdAt")
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean(),
+  ]);
+  const modelIds = [...new Set(assignments.map((assignment) => assignment.modelAccountId.toString()))];
+  const models = modelIds.length > 0
+    ? await ModelAccount.find({ _id: { $in: modelIds } }).select("displayName").lean()
+    : [];
+  const modelNames = new Map(models.map((modelAccount) => [
+    modelAccount._id.toString(),
+    modelAccount.displayName,
+  ]));
+
+  res.json({
+    chatter: {
+      id: chatter._id.toString(),
+      displayName: chatter.displayName,
+      email: chatter.email,
+      role: chatter.role,
+      status: chatterStatus(chatter),
+      createdAt: chatter.createdAt,
+      lastLoginAt: chatter.lastLoginAt,
+      createdBy: chatter.createdBy?.toString() ?? null,
+      disabledAt: chatter.disabledAt,
+      disabledReason: chatter.disabledReason,
+      bannedAt: chatter.bannedAt,
+      banReason: chatter.banReason,
+      archivedAt: chatter.archivedAt,
+    },
+    assignedModels: assignments.map((assignment) => ({
+      assignmentId: assignment._id.toString(),
+      modelId: assignment.modelAccountId.toString(),
+      modelName: modelNames.get(assignment.modelAccountId.toString()) ?? "Model",
+      assignedAt: assignment.assignedAt,
+    })),
+    history: history.map((entry) => ({
+      id: entry._id.toString(),
+      adminId: entry.actorId.toString(),
+      action: entry.action,
+      reason: entry.reason ?? "",
+      createdAt: entry.createdAt,
+    })),
+  });
+});
+
+router.post("/chatters/:id/assignments", authorize("ADMIN"), async (req, res) => {
+  const id = parseInput(objectIdSchema, req.params.id);
+  const input = parseInput(
+    z.object({ modelIds: z.array(objectIdSchema).min(1).max(100) }),
+    req.body,
+  );
+  const worker = await Worker.findOne({
+    _id: id,
+    role: { $in: ["CHATTER", "worker"] },
+    active: true,
+    suspendedAt: null,
+    status: { $in: ["ACTIVE", null] },
+  }).select("_id");
+  if (!worker) throw new HttpError(404, "Active chatter not found");
+
+  const modelIds = [...new Set(input.modelIds)];
+  const models = await ModelAccount.find({
+    _id: { $in: modelIds },
+    active: true,
+    $or: [{ status: "active" }, { status: { $exists: false } }],
+  }).select("_id").lean();
+  if (models.length !== modelIds.length) {
+    throw new HttpError(400, "Only active models can be assigned");
+  }
+
+  const actorId = req.authenticatedWorker?.id ?? null;
+  const savedAssignments = [];
+  for (const modelId of modelIds) {
+    let assignment = await WorkerAssignment.findOne({ workerId: id, modelAccountId: modelId });
+    if (assignment?.active) continue;
+    const assignedAt = new Date();
+    if (assignment) {
+      assignment.active = true;
+      assignment.status = "active";
+      assignment.assignedBy = actorId ? new Types.ObjectId(actorId) : null;
+      assignment.assignedAt = assignedAt;
+      assignment.removedAt = null;
+      assignment.history.push({
+        action: "assigned",
+        actorId: actorId ? new Types.ObjectId(actorId) : null,
+        at: assignedAt,
+      });
+    } else {
+      assignment = new WorkerAssignment({
+        workerId: id,
+        modelAccountId: modelId,
+        active: true,
+        status: "active",
+        assignedBy: actorId,
+        assignedAt,
+        history: [{ action: "assigned", actorId, at: assignedAt }],
+      });
+    }
+    await assignment.save();
+    await audit(
+      req,
+      "chatter.model_assigned",
+      "WorkerAssignment",
+      assignment._id.toString(),
+      null,
+      { chatterId: id, modelAccountId: modelId },
+      { chatterId: id },
+    );
+    savedAssignments.push(assignment);
+  }
+  res.status(201).json({ assignments: savedAssignments });
+});
+
 router.post("/chatters/:id/password-reset", authorize("ADMIN"), async (req, res) => {
   const id = parseInput(objectIdSchema, req.params.id);
-  const worker = await Worker.findById(id);
-  if (!worker) throw new HttpError(404, "Staff account not found");
-  const temporaryPassword = crypto.randomBytes(9).toString("base64url");
+  const worker = await Worker.findOne({
+    _id: id,
+    role: { $in: ["CHATTER", "worker"] },
+  });
+  if (!worker) throw new HttpError(404, "Chatter account not found");
+  const temporaryPassword = generateStrongPassword();
   worker.passwordHash = await bcrypt.hash(temporaryPassword, 12);
-  worker.mustChangePassword = true;
+  worker.mustChangePassword = false;
   worker.tokenVersion += 1;
   await worker.save();
-  await audit(req, "staff.password_reset", "Worker", id);
-  res.json({ temporaryPassword, mustChangePassword: true });
+  await audit(
+    req,
+    "chatter.password_reset",
+    "Worker",
+    id,
+    null,
+    null,
+    { chatterId: id },
+  );
+  res.json({ temporaryPassword });
 });
 
 router.patch("/chatters/:id/status", authorize("ADMIN"), async (req, res) => {
   const id = parseInput(objectIdSchema, req.params.id);
-  const input = parseInput(z.object({ suspended: z.boolean() }), req.body);
-  const before = await Worker.findById(id).select("-passwordHash").lean();
-  if (!before) throw new HttpError(404, "Staff account not found");
-  const worker = await Worker.findByIdAndUpdate(
-    id,
+  const input = parseInput(
+    z.object({
+      status: z.enum(["ACTIVE", "DISABLED"]).optional(),
+      suspended: z.boolean().optional(),
+      reason: z.string().trim().max(500).optional(),
+    }).refine((value) => value.status !== undefined || value.suspended !== undefined),
+    req.body,
+  );
+  const before = await Worker.findOne({
+    _id: id,
+    role: { $in: ["CHATTER", "worker"] },
+  }).select(CHATTER_PROFILE_FIELDS).lean();
+  if (!before) throw new HttpError(404, "Chatter account not found");
+  const currentStatus = chatterStatus(before);
+  if (currentStatus === "BANNED" || currentStatus === "ARCHIVED") {
+    throw new HttpError(409, "Banned or archived accounts require a separate action");
+  }
+  const targetStatus = input.status ?? (input.suspended ? "DISABLED" : "ACTIVE");
+  const disabled = targetStatus === "DISABLED";
+  const worker = await Worker.findOneAndUpdate(
     {
-      active: !input.suspended,
-      suspendedAt: input.suspended ? new Date() : null,
+      _id: id,
+      role: { $in: ["CHATTER", "worker"] },
+      status: { $nin: ["BANNED", "ARCHIVED"] },
+    },
+    {
+      $set: {
+        status: targetStatus,
+        active: !disabled,
+        suspendedAt: disabled ? new Date() : null,
+        disabledAt: disabled ? new Date() : null,
+        disabledReason: disabled ? (input.reason ?? "") : "",
+      },
       $inc: { tokenVersion: 1 },
     },
     { new: true, runValidators: true },
-  ).select("-passwordHash");
-  await audit(req, input.suspended ? "staff.suspend" : "staff.reactivate", "Worker", id, before, worker);
+  ).select(CHATTER_PROFILE_FIELDS);
+  if (!worker) throw new HttpError(409, "Chatter account status changed; reload and try again");
+  await audit(
+    req,
+    disabled ? "chatter.disabled" : "chatter.reactivated",
+    "Worker",
+    id,
+    before,
+    worker,
+    { chatterId: id, reason: input.reason ?? "" },
+  );
+  res.json({ chatter: worker });
+});
+
+router.post("/chatters/:id/ban", authorize("ADMIN"), async (req, res) => {
+  const id = parseInput(objectIdSchema, req.params.id);
+  const { reason } = parseInput(
+    z.object({ reason: z.string().trim().min(3).max(500) }),
+    req.body,
+  );
+  const before = await Worker.findOne({
+    _id: id,
+    role: { $in: ["CHATTER", "worker"] },
+  }).select(CHATTER_PROFILE_FIELDS).lean();
+  if (!before) throw new HttpError(404, "Chatter account not found");
+  if (chatterStatus(before) === "BANNED" || chatterStatus(before) === "ARCHIVED") {
+    throw new HttpError(409, "This account cannot be banned in its current state");
+  }
+  const worker = await Worker.findOneAndUpdate(
+    {
+      _id: id,
+      role: { $in: ["CHATTER", "worker"] },
+      status: { $nin: ["BANNED", "ARCHIVED"] },
+    },
+    {
+      $set: {
+        status: "BANNED",
+        active: false,
+        suspendedAt: new Date(),
+        bannedAt: new Date(),
+        banReason: reason,
+      },
+      $inc: { tokenVersion: 1 },
+    },
+    { new: true, runValidators: true },
+  ).select(CHATTER_PROFILE_FIELDS);
+  if (!worker) throw new HttpError(409, "Chatter account status changed; reload and try again");
+  await audit(
+    req,
+    "chatter.banned",
+    "Worker",
+    id,
+    before,
+    worker,
+    { chatterId: id, reason: reason ?? "" },
+  );
+  res.json({ chatter: worker });
+});
+
+router.post("/chatters/:id/unban", authorize("ADMIN"), async (req, res) => {
+  const id = parseInput(objectIdSchema, req.params.id);
+  const { reason } = parseInput(
+    z.object({ reason: z.string().trim().min(3).max(500) }),
+    req.body,
+  );
+  const before = await Worker.findOne({
+    _id: id,
+    role: { $in: ["CHATTER", "worker"] },
+  }).select(CHATTER_PROFILE_FIELDS).lean();
+  if (!before) throw new HttpError(404, "Chatter account not found");
+  if (chatterStatus(before) !== "BANNED") {
+    throw new HttpError(409, "Only banned accounts can be unbanned");
+  }
+  const worker = await Worker.findOneAndUpdate(
+    { _id: id, role: { $in: ["CHATTER", "worker"] }, status: "BANNED" },
+    {
+      $set: {
+        status: "ACTIVE",
+        active: true,
+        suspendedAt: null,
+        disabledAt: null,
+        disabledReason: "",
+        bannedAt: null,
+        banReason: "",
+      },
+      $inc: { tokenVersion: 1 },
+    },
+    { new: true, runValidators: true },
+  ).select(CHATTER_PROFILE_FIELDS);
+  if (!worker) throw new HttpError(409, "Chatter account status changed; reload and try again");
+  await audit(
+    req,
+    "chatter.unbanned",
+    "Worker",
+    id,
+    before,
+    worker,
+    { chatterId: id, reason: reason ?? "" },
+  );
+  res.json({ chatter: worker });
+});
+
+router.post("/chatters/:id/archive", authorize("ADMIN"), async (req, res) => {
+  const id = parseInput(objectIdSchema, req.params.id);
+  const { reason } = parseInput(
+    z.object({ reason: z.string().trim().max(500).optional() }),
+    req.body,
+  );
+  const before = await Worker.findOne({
+    _id: id,
+    role: { $in: ["CHATTER", "worker"] },
+  }).select(CHATTER_PROFILE_FIELDS).lean();
+  if (!before) throw new HttpError(404, "Chatter account not found");
+  if (chatterStatus(before) === "ARCHIVED") {
+    throw new HttpError(409, "This account is already archived");
+  }
+  const worker = await Worker.findOneAndUpdate(
+    {
+      _id: id,
+      role: { $in: ["CHATTER", "worker"] },
+      status: { $ne: "ARCHIVED" },
+    },
+    {
+      $set: {
+        status: "ARCHIVED",
+        active: false,
+        suspendedAt: new Date(),
+        archivedAt: new Date(),
+      },
+      $inc: { tokenVersion: 1 },
+    },
+    { new: true, runValidators: true },
+  ).select(CHATTER_PROFILE_FIELDS);
+  if (!worker) throw new HttpError(409, "Chatter account status changed; reload and try again");
+  await audit(
+    req,
+    "chatter.archived",
+    "Worker",
+    id,
+    before,
+    worker,
+    { chatterId: id, reason: reason ?? "" },
+  );
   res.json({ chatter: worker });
 });
 
@@ -379,6 +896,7 @@ router.post("/assignments", authorize("ADMIN"), async (req, res) => {
     role: { $in: ["CHATTER", "worker"] },
     active: true,
     suspendedAt: null,
+    status: { $in: ["ACTIVE", null] },
   }).select("_id").lean();
   if (eligibleWorkers.length !== workerIds.length) {
     throw new HttpError(400, "Only active chatters can be assigned to a model");
@@ -411,10 +929,15 @@ router.post("/assignments", authorize("ADMIN"), async (req, res) => {
       });
     }
     await existing.save();
-    await audit(req, "assignment.create", "WorkerAssignment", existing._id.toString(), null, {
-      workerId,
-      modelAccountId: input.modelAccountId,
-    });
+    await audit(
+      req,
+      "chatter.model_assigned",
+      "WorkerAssignment",
+      existing._id.toString(),
+      null,
+      { workerId, modelAccountId: input.modelAccountId },
+      { chatterId: workerId },
+    );
     assignments.push(existing);
   }
   res.status(201).json({ assignments });
@@ -440,7 +963,15 @@ router.delete("/assignments/:id", authorize("ADMIN"), async (req, res) => {
     },
     { new: true },
   );
-  await audit(req, "assignment.remove", "WorkerAssignment", id, before, assignment);
+  await audit(
+    req,
+    "chatter.model_unassigned",
+    "WorkerAssignment",
+    id,
+    before,
+    assignment,
+    { chatterId: before.workerId.toString() },
+  );
   res.json({ assignment });
 });
 

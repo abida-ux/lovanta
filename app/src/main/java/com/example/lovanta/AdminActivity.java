@@ -1,12 +1,13 @@
 package com.example.lovanta;
 
 import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
-import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
@@ -14,8 +15,10 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,12 +32,14 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class AdminActivity extends AppCompatActivity {
     private static final String[] PAGES = {
-            "Overview", "Models", "Chatters", "Assignments", "Subscribers",
-            "Conversations", "PPV", "Transactions", "Commissions", "Audit"
+            "Overview", "Models", "Chatters", "Model Assignments",
+            "Account Management", "Reports & Analytics", "Settings"
     };
 
     private ApiClient api;
@@ -45,13 +50,18 @@ public class AdminActivity extends AppCompatActivity {
     private View modelFilters;
     private EditText modelSearch;
     private Spinner modelStatusFilter;
+    private View chatterFilters;
+    private EditText chatterSearch;
+    private Spinner chatterStatusFilter;
     private String currentPage = "Overview";
     private JSONArray cachedModels = new JSONArray();
     private JSONArray cachedChatters = new JSONArray();
     private int activeRequests;
     private int pageRequestVersion;
+    private final Handler chatterSearchHandler = new Handler(Looper.getMainLooper());
     private final Handler modelSearchHandler = new Handler(Looper.getMainLooper());
     private final Runnable modelSearchReload = () -> loadPage("Models");
+    private final Runnable chatterSearchReload = () -> loadPage("Chatters");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,13 +76,18 @@ public class AdminActivity extends AppCompatActivity {
         modelFilters = findViewById(R.id.modelFilters);
         modelSearch = findViewById(R.id.adminModelSearch);
         modelStatusFilter = findViewById(R.id.adminModelStatus);
+        chatterFilters = findViewById(R.id.chatterFilters);
+        chatterSearch = findViewById(R.id.adminChatterSearch);
+        chatterStatusFilter = findViewById(R.id.adminChatterStatus);
 
         String role = api.getRole();
         ((TextView) findViewById(R.id.tvAdminRole)).setText(role);
         boolean isAdmin = "ADMIN".equals(role);
         findViewById(R.id.adminActions).setVisibility(isAdmin ? View.VISIBLE : View.GONE);
         setupModelFilters();
+        setupChatterFilters();
         setupNavigation();
+        updateNavigation();
         findViewById(R.id.btnAdminLogout).setOnClickListener(v -> signOut());
         findViewById(R.id.btnCreateModel).setOnClickListener(v -> createModel());
         findViewById(R.id.btnCreateChatter).setOnClickListener(v -> createChatter());
@@ -109,13 +124,23 @@ public class AdminActivity extends AppCompatActivity {
 
     private boolean pageAllowed(String page) {
         if ("ADMIN".equals(api.getRole())) return true;
-        return Arrays.asList("Overview", "Models", "Chatters", "Conversations",
-                "PPV", "Transactions", "Audit").contains(page);
+        return Arrays.asList("Overview", "Models",
+                "Reports & Analytics").contains(page);
     }
 
     private void updateNavigation() {
         title.setText(currentPage);
         modelFilters.setVisibility("Models".equals(currentPage) ? View.VISIBLE : View.GONE);
+        chatterFilters.setVisibility("Chatters".equals(currentPage) ? View.VISIBLE : View.GONE);
+        boolean admin = "ADMIN".equals(api.getRole());
+        boolean modelActions = admin && "Models".equals(currentPage);
+        boolean chatterActions = admin && "Chatters".equals(currentPage);
+        boolean assignmentActions = admin && "Model Assignments".equals(currentPage);
+        findViewById(R.id.adminActions).setVisibility(
+                modelActions || chatterActions || assignmentActions ? View.VISIBLE : View.GONE);
+        findViewById(R.id.btnCreateModel).setVisibility(modelActions ? View.VISIBLE : View.GONE);
+        findViewById(R.id.btnCreateChatter).setVisibility(chatterActions ? View.VISIBLE : View.GONE);
+        findViewById(R.id.btnAssignModel).setVisibility(assignmentActions ? View.VISIBLE : View.GONE);
         for (int i = 0; i < navigation.getChildCount(); i++) {
             Button button = (Button) navigation.getChildAt(i);
             boolean selected = currentPage.equals(button.getTag());
@@ -128,6 +153,16 @@ public class AdminActivity extends AppCompatActivity {
         int requestVersion = ++pageRequestVersion;
         content.removeAllViews();
         content.setVisibility(View.INVISIBLE);
+        if ("Settings".equals(page)) {
+            renderSettings();
+            return;
+        }
+        if ("Reports & Analytics".equals(page)) {
+            api.get("/api/v1/admin/dashboard", callback(result -> {
+                if (requestVersion == pageRequestVersion) renderReports(result);
+            }));
+            return;
+        }
         if ("Overview".equals(page)) {
             api.get("/api/v1/admin/dashboard", callback(result -> {
                 if (requestVersion == pageRequestVersion) renderDashboard(result);
@@ -144,12 +179,54 @@ public class AdminActivity extends AppCompatActivity {
                 path += "&status=" + statuses[statusPosition];
             }
         }
+        if ("Chatters".equals(page)) {
+            String search = chatterSearch.getText().toString().trim();
+            if (!search.isEmpty()) path += "&search=" + Uri.encode(search);
+            int statusPosition = chatterStatusFilter.getSelectedItemPosition();
+            if (statusPosition > 0) {
+                String[] statuses = {"", "ACTIVE", "DISABLED", "BANNED", "ARCHIVED"};
+                path += "&status=" + statuses[statusPosition];
+            }
+        }
         api.get(path, callback(result -> {
             if (requestVersion != pageRequestVersion) return;
-            JSONArray records = "Assignments".equals(page)
+            JSONArray records = "Model Assignments".equals(page)
                     ? result.optJSONArray("assignments") : result.optJSONArray("items");
             renderRecords(page, records);
         }));
+    }
+
+    private void setupChatterFilters() {
+        String[] labels = {"All accounts", "Active", "Disabled", "Banned", "Archived"};
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, labels);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        chatterStatusFilter.setAdapter(adapter);
+        chatterSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence value, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable value) {
+                if (!"Chatters".equals(currentPage)) return;
+                chatterSearchHandler.removeCallbacks(chatterSearchReload);
+                chatterSearchHandler.postDelayed(chatterSearchReload, 300);
+            }
+        });
+        chatterStatusFilter.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (!"Chatters".equals(currentPage)) return;
+                chatterSearchHandler.removeCallbacks(chatterSearchReload);
+                chatterSearchHandler.postDelayed(chatterSearchReload, 100);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
     }
 
     private void setupModelFilters() {
@@ -191,19 +268,15 @@ public class AdminActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         modelSearchHandler.removeCallbacks(modelSearchReload);
+        chatterSearchHandler.removeCallbacks(chatterSearchReload);
         super.onDestroy();
     }
 
     private String routeFor(String page) {
         switch (page) {
             case "Chatters": return "chatters";
-            case "Assignments": return "assignments";
-            case "Subscribers": return "subscribers";
-            case "Conversations": return "conversations";
-            case "PPV": return "ppv";
-            case "Transactions": return "transactions";
-            case "Commissions": return "commissions";
-            case "Audit": return "audit";
+            case "Model Assignments": return "assignments";
+            case "Account Management": return "subscribers";
             default: return "models";
         }
     }
@@ -211,17 +284,92 @@ public class AdminActivity extends AppCompatActivity {
     private void renderDashboard(JSONObject data) {
         content.removeAllViews();
         content.setVisibility(View.VISIBLE);
-        addSectionTitle("Operational overview");
-        addMetric("Subscribers", data.optString("subscribers", "—"), "Active " + data.optString("activeSubscribers", "—"));
-        addMetric("Models", data.optString("models", "—"), "Active " + data.optString("activeModels", "—"));
-        addMetric("Chatters", data.optString("chatters", "—"), "Assigned staff");
-        addMetric("Conversations", data.optString("conversations", "—"), "Active " + data.optString("activeConversations", "—"));
-        addMetric("PPV purchases", data.optString("ppvPurchases", "—"), "PPV messages " + data.optString("ppvMessages", "—"));
-        addMetric("Revenue", money(data.optDouble("totalRevenue", 0)), "Today " + money(data.optDouble("revenueToday", 0)));
-        addMetric("Transactions", data.optString("successfulTransactions", "—") + " successful",
-                data.optString("pendingTransactions", "—") + " pending · " + data.optString("refunds", "—") + " refunds");
-        addSectionTitle("Workspace");
-        addText("Metrics are calculated from records currently available in the server database. An empty database remains empty; no sample figures are shown.");
+        addSectionTitle("Management overview");
+        addMetricRow(
+                new String[]{"Total models", "Active models"},
+                new String[]{
+                        data.optString("totalModels", data.optString("models", "0")),
+                        data.optString("activeModels", "0"),
+                });
+        addMetricRow(
+                new String[]{"Total chatters", "Active chatters"},
+                new String[]{
+                        data.optString("totalChatters", data.optString("chatters", "0")),
+                        data.optString("activeChatters", "0"),
+                });
+        addMetricRow(new String[]{"Disabled accounts"}, new String[]{
+                data.optString("disabledAccounts", "0"),
+        });
+
+        addSectionTitle("Recent recruitment");
+        JSONArray recruited = data.optJSONArray("recentRecruitment");
+        if (recruited == null || recruited.length() == 0) {
+            addText("No chatter accounts have been created yet.");
+        } else {
+            for (int i = 0; i < recruited.length(); i++) {
+                JSONObject chatter = recruited.optJSONObject(i);
+                if (chatter == null) continue;
+                addActivityLine(
+                        chatter.optString("displayName", "Chatter")
+                                + " · " + chatter.optString("email", ""),
+                        chatter.optString("createdAt", ""));
+            }
+        }
+
+        addSectionTitle("Recent administrative actions");
+        JSONArray actions = data.optJSONArray("recentActions");
+        if (actions == null || actions.length() == 0) {
+            addText("No administrative actions have been recorded yet.");
+        } else {
+            for (int i = 0; i < actions.length(); i++) {
+                JSONObject action = actions.optJSONObject(i);
+                if (action == null) continue;
+                String reason = action.optString("reason", "");
+                addActivityLine(
+                        action.optString("action", "Action")
+                                + " · " + action.optString("affectedId", ""),
+                        action.optString("createdAt", "")
+                                + (reason.isEmpty() ? "" : " · " + reason));
+            }
+        }
+    }
+
+    private void renderReports(JSONObject data) {
+        content.removeAllViews();
+        content.setVisibility(View.VISIBLE);
+        addSectionTitle("Business reporting");
+        addMetricRow(
+                new String[]{"Total revenue", "Successful transactions"},
+                new String[]{
+                        money(data.optDouble("totalRevenue", 0)),
+                        data.optString("successfulTransactions", "0"),
+                });
+        addMetricRow(
+                new String[]{"Revenue this month", "Revenue this week"},
+                new String[]{
+                        money(data.optDouble("revenueMonth", 0)),
+                        money(data.optDouble("revenueWeek", 0)),
+                });
+        addMetricRow(
+                new String[]{"Paid PPV purchases", "Paid commissions"},
+                new String[]{
+                        data.optString("paidPpvPurchases", "0"),
+                        money(data.optDouble("paidCommissions", 0)),
+                });
+        addMetricRow(
+                new String[]{"Pending transactions", "Pending commissions"},
+                new String[]{
+                        data.optString("pendingTransactions", "0"),
+                        money(data.optDouble("pendingCommissions", 0)),
+                });
+        addText("Chatter conversation and sales activity stays in the chatter workspace.");
+    }
+
+    private void renderSettings() {
+        content.removeAllViews();
+        content.setVisibility(View.VISIBLE);
+        addSectionTitle("Settings");
+        addText("There are no in-app system settings configured. Backend environment settings are managed in Render.");
     }
 
     private void renderRecords(String page, JSONArray records) {
@@ -235,6 +383,10 @@ public class AdminActivity extends AppCompatActivity {
     private void renderItems(String page, JSONArray records) {
         content.removeAllViews();
         content.setVisibility(View.VISIBLE);
+        if ("Chatters".equals(page)) {
+            renderChatterTable(records);
+            return;
+        }
         addSectionTitle(page + " · " + records.length());
         if (records.length() == 0) {
             addText("No " + page.toLowerCase() + " records found.");
@@ -262,13 +414,11 @@ public class AdminActivity extends AppCompatActivity {
             details.setPadding(0, dp(5), 0, 0);
             card.addView(details);
 
-            if ("Chatters".equals(page) && "ADMIN".equals(api.getRole())) {
-                addStaffActions(card, row);
-            } else if ("Models".equals(page) && "ADMIN".equals(api.getRole())) {
+            if ("Models".equals(page) && "ADMIN".equals(api.getRole())) {
                 addModelActions(card, row);
-            } else if ("Subscribers".equals(page) && "ADMIN".equals(api.getRole())) {
+            } else if ("Account Management".equals(page) && "ADMIN".equals(api.getRole())) {
                 addSubscriberActions(card, row);
-            } else if ("Assignments".equals(page) && "ADMIN".equals(api.getRole())
+            } else if ("Model Assignments".equals(page) && "ADMIN".equals(api.getRole())
                     && row.optBoolean("active", false)) {
                 addAssignmentRemoveAction(card, row);
             }
@@ -281,13 +431,9 @@ public class AdminActivity extends AppCompatActivity {
             case "Models": return row.optString("displayName", "Model");
             case "Chatters":
                 return row.optString("displayName", "Staff") + " · " + row.optString("role", "");
-            case "Assignments":
+            case "Model Assignments":
                 return nestedName(row.opt("modelAccountId")) + " ↔ " + nestedName(row.opt("workerId"));
-            case "Subscribers": return row.optString("username", "Subscriber");
-            case "Conversations": return "Subscriber " + row.optString("subscriberId", "");
-            case "PPV": return "PPV " + row.optString("status", "pending");
-            case "Transactions": return row.optString("reference", "Transaction");
-            case "Commissions": return "Commission " + money(row.optDouble("amount", 0));
+            case "Account Management": return row.optString("username", "Subscriber");
             default: return row.optString("action", "Audit event");
         }
     }
@@ -301,37 +447,453 @@ public class AdminActivity extends AppCompatActivity {
             case "Chatters":
                 return row.optString("email", "") + " · " + (row.optBoolean("active", false) ? "Active" : "Suspended")
                         + "\nLast login: " + row.optString("lastLoginAt", "Not available");
-            case "Assignments":
+            case "Model Assignments":
                 return "Status: " + row.optString("status", row.optBoolean("active") ? "active" : "removed")
                         + " · Assigned: " + row.optString("assignedAt", "—");
-            case "Subscribers":
+            case "Account Management":
                 return "Status: " + row.optString("status", "—") + " · Registered: " + row.optString("createdAt", "—");
-            case "Conversations":
-                return row.optString("lastMessageText", "") + "\n" + row.optString("lastMessageAt", "");
-            case "PPV":
-                return money(row.optDouble("amount", 0)) + " · " + row.optString("purchasedAt", "Not purchased");
-            case "Transactions":
-                return money(row.optDouble("amount", 0)) + " " + row.optString("currency", "")
-                        + " · " + row.optString("status", "") + " · " + row.optString("createdAt", "");
-            case "Commissions":
-                return row.optString("status", "") + " · " + row.optString("createdAt", "");
             default:
                 return row.optString("actorRole", "") + " · " + row.optString("affectedType", "")
                         + " " + row.optString("affectedId", "") + "\n" + row.optString("createdAt", "");
         }
     }
 
-    private void addStaffActions(LinearLayout card, JSONObject staff) {
-        String id = staff.optString("_id", "");
+    private void renderChatterTable(JSONArray chatters) {
+        addSectionTitle("Chatter accounts · " + chatters.length());
+        if (chatters.length() == 0) {
+            addText("No chatter accounts match this search.");
+            return;
+        }
+
+        HorizontalScrollView horizontal = new HorizontalScrollView(this);
+        horizontal.setFillViewport(false);
+        horizontal.setHorizontalScrollBarEnabled(true);
+        LinearLayout table = new LinearLayout(this);
+        table.setOrientation(LinearLayout.VERTICAL);
+        int[] widths = {130, 190, 170, 100, 150, 150, 125};
+        String[] headers = {"Chatter ID", "Login identifier", "Assigned models",
+                "Status", "Created", "Last login", "Actions"};
+        table.addView(chatterTableRow(headers, widths, true));
+
+        for (int i = 0; i < chatters.length(); i++) {
+            JSONObject chatter = chatters.optJSONObject(i);
+            if (chatter == null) continue;
+            String id = chatter.optString("_id", "");
+            JSONArray assigned = chatter.optJSONArray("assignedModels");
+            String[] values = {
+                    id,
+                    chatter.optString("email", ""),
+                    assignedModelNames(assigned),
+                    chatter.optString("status", "ACTIVE"),
+                    jsonDisplayValue(chatter, "createdAt", "—"),
+                    jsonDisplayValue(chatter, "lastLoginAt", "Never"),
+                    "View / manage",
+            };
+            LinearLayout row = chatterTableRow(values, widths, false);
+            row.setOnClickListener(v -> showChatterProfile(id));
+            table.addView(row);
+            View divider = new View(this);
+            divider.setBackgroundColor(getResources().getColor(R.color.lovanta_border));
+            table.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+        }
+        horizontal.addView(table);
+        content.addView(horizontal, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private LinearLayout chatterTableRow(String[] values, int[] widths, boolean header) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        Button reset = smallButton("Reset password");
-        reset.setOnClickListener(v -> resetPassword(id));
-        Button status = smallButton(staff.optBoolean("active", false) ? "Suspend" : "Reactivate");
-        status.setOnClickListener(v -> changeStaffStatus(id, !staff.optBoolean("active", false)));
-        row.addView(reset, weightedButton());
-        row.addView(status, weightedButton());
-        card.addView(row);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        if (header) row.setBackgroundColor(getResources().getColor(R.color.lovanta_surface));
+        for (int i = 0; i < widths.length; i++) {
+            TextView cell = new TextView(this);
+            cell.setText(values[i]);
+            cell.setTextSize(header ? 12 : 11);
+            cell.setTextColor(getResources().getColor(
+                    header ? R.color.lovanta_dark : R.color.lovanta_gray));
+            cell.setPadding(dp(8), dp(10), dp(8), dp(10));
+            cell.setMaxLines(2);
+            cell.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            if (header) cell.setTypeface(null, android.graphics.Typeface.BOLD);
+            if (!header && i == 3 && "ACTIVE".equals(values[i])) {
+                cell.setTextColor(getResources().getColor(R.color.lovanta_pink));
+            }
+            row.addView(cell, new LinearLayout.LayoutParams(dp(widths[i]), -2));
+        }
+        return row;
+    }
+
+    private String assignedModelNames(JSONArray assignments) {
+        if (assignments == null || assignments.length() == 0) return "None";
+        StringBuilder names = new StringBuilder();
+        for (int i = 0; i < assignments.length(); i++) {
+            JSONObject assignment = assignments.optJSONObject(i);
+            if (assignment == null) continue;
+            if (names.length() > 0) names.append(", ");
+            names.append(assignment.optString("modelName", "Model"));
+        }
+        return names.length() == 0 ? "None" : names.toString();
+    }
+
+    private void showChatterProfile(String id) {
+        api.get("/api/v1/admin/chatters/" + id, callback(result -> {
+            JSONObject chatter = result.optJSONObject("chatter");
+            if (chatter == null) {
+                toast("Unable to load chatter profile.");
+                return;
+            }
+            showChatterProfileDialog(chatter, result.optJSONArray("assignedModels"),
+                    result.optJSONArray("history"));
+        }));
+    }
+
+    private void showChatterProfileDialog(
+            JSONObject chatter, JSONArray assignedModels, JSONArray history) {
+        String id = chatter.optString("id", "");
+        String email = chatter.optString("email", "");
+        String status = chatter.optString("status", "ACTIVE");
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout panel = formLayout();
+        AlertDialog[] profileDialog = new AlertDialog[1];
+        panel.addView(profileLine("Chatter ID", id));
+        panel.addView(profileLine("Login identifier", email));
+        panel.addView(profileLine("Account status", status));
+        panel.addView(profileLine("Role", chatter.optString("role", "CHATTER")));
+        panel.addView(profileLine("Created", jsonDisplayValue(chatter, "createdAt", "—")));
+        panel.addView(profileLine("Last login", jsonDisplayValue(chatter, "lastLoginAt", "Never")));
+        panel.addView(profileLine("Created by admin", jsonDisplayValue(chatter, "createdBy", "—")));
+        if ("DISABLED".equals(status) && !chatter.optString("disabledReason", "").isEmpty()) {
+            panel.addView(profileLine("Disable reason", chatter.optString("disabledReason")));
+        }
+        if ("BANNED".equals(status)) {
+            panel.addView(profileLine("Ban reason", chatter.optString("banReason", "—")));
+        }
+
+        addSectionTo(panel, "Assigned models");
+        if (assignedModels == null || assignedModels.length() == 0) {
+            addMessageTo(panel, "No models are assigned.");
+        } else {
+            for (int i = 0; i < assignedModels.length(); i++) {
+                JSONObject assignment = assignedModels.optJSONObject(i);
+                if (assignment == null) continue;
+                LinearLayout row = new LinearLayout(this);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                TextView modelName = new TextView(this);
+                modelName.setText(assignment.optString("modelName", "Model"));
+                modelName.setTextSize(13);
+                modelName.setTextColor(getResources().getColor(R.color.lovanta_dark));
+                row.addView(modelName, new LinearLayout.LayoutParams(0, -2, 1));
+                Button unassign = smallButton("Unassign");
+                String assignmentId = assignment.optString("assignmentId", "");
+                unassign.setOnClickListener(v -> {
+                    if (profileDialog[0] != null) profileDialog[0].dismiss();
+                    confirmChatterUnassignment(id, assignmentId);
+                });
+                row.addView(unassign);
+                panel.addView(row);
+            }
+        }
+
+        addSectionTo(panel, "Administrative history");
+        if (history == null || history.length() == 0) {
+            addMessageTo(panel, "No account actions have been recorded.");
+        } else {
+            for (int i = 0; i < history.length(); i++) {
+                JSONObject entry = history.optJSONObject(i);
+                if (entry == null) continue;
+                String reason = entry.optString("reason", "");
+                addMessageTo(panel,
+                        entry.optString("action", "Action")
+                                + " · Admin " + entry.optString("adminId", "—")
+                                + "\n" + entry.optString("createdAt", "")
+                                + (reason.isEmpty() ? "" : "\nReason: " + reason));
+            }
+        }
+
+        addSectionTo(panel, "Account actions");
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(email.isEmpty() ? "Chatter profile" : email)
+                .setView(scroll)
+                .setPositiveButton("Done", null)
+                .create();
+        profileDialog[0] = dialog;
+        scroll.addView(panel);
+
+        if ("ACTIVE".equals(status)) {
+            addProfileAction(panel, "Disable account", () -> {
+                dialog.dismiss();
+                requestAccountStatus(id, "DISABLED");
+            });
+        } else if ("DISABLED".equals(status)) {
+            addProfileAction(panel, "Reactivate account", () -> {
+                dialog.dismiss();
+                requestAccountStatus(id, "ACTIVE");
+            });
+        }
+        if ("ACTIVE".equals(status) || "DISABLED".equals(status)) {
+            addProfileAction(panel, "Ban account", () -> {
+                dialog.dismiss();
+                requestReason("Ban chatter", "Enter a reason for permanently blocking this account.",
+                        true, reason -> changeChatterState(id, "ban", reason));
+            });
+        } else if ("BANNED".equals(status)) {
+            addProfileAction(panel, "Unban account", () -> {
+                dialog.dismiss();
+                requestReason("Unban chatter", "Enter a reason for restoring this account.",
+                        true, reason -> changeChatterState(id, "unban", reason));
+            });
+        }
+        if (!"ARCHIVED".equals(status)) {
+            addProfileAction(panel, "Reset password", () -> {
+                dialog.dismiss();
+                resetPassword(id, email);
+            });
+            addProfileAction(panel, "Archive account", () -> {
+                dialog.dismiss();
+                requestReason("Archive chatter", "Optionally enter a reason for archiving.",
+                        false, reason -> changeChatterState(id, "archive", reason));
+            });
+        }
+        if ("ACTIVE".equals(status)) {
+            addProfileAction(panel, "Assign models", () -> {
+                dialog.dismiss();
+                chooseModelsForChatter(id, assignedModels);
+            });
+        }
+        dialog.show();
+    }
+
+    private TextView profileLine(String label, String value) {
+        TextView line = new TextView(this);
+        line.setText(label + ": " + (value.isEmpty() ? "—" : value));
+        line.setTextSize(13);
+        line.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        line.setPadding(0, dp(4), 0, dp(4));
+        return line;
+    }
+
+    private void addSectionTo(LinearLayout target, String label) {
+        TextView heading = new TextView(this);
+        heading.setText(label);
+        heading.setTextSize(14);
+        heading.setTypeface(null, android.graphics.Typeface.BOLD);
+        heading.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = dp(12);
+        target.addView(heading, params);
+    }
+
+    private void addMessageTo(LinearLayout target, String message) {
+        TextView text = new TextView(this);
+        text.setText(message);
+        text.setTextSize(12);
+        text.setTextColor(getResources().getColor(R.color.lovanta_gray));
+        text.setPadding(0, dp(4), 0, dp(4));
+        target.addView(text);
+    }
+
+    private void addProfileAction(LinearLayout target, String label, Runnable action) {
+        Button button = smallButton(label);
+        button.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(42));
+        params.topMargin = dp(5);
+        target.addView(button, params);
+    }
+
+    private void requestAccountStatus(String id, String status) {
+        String action = "DISABLED".equals(status) ? "Disable" : "Reactivate";
+        new AlertDialog.Builder(this)
+                .setTitle(action + " chatter account?")
+                .setMessage("This will invalidate the chatter's active sessions.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton(action, (dialog, which) -> {
+                    JSONObject body = new JSONObject();
+                    try {
+                        body.put("status", status);
+                    } catch (JSONException error) {
+                        toast("Unable to prepare account update.");
+                        return;
+                    }
+                    api.patch("/api/v1/admin/chatters/" + id + "/status", body,
+                            callback(result -> {
+                                toast("Account " + status.toLowerCase() + ".");
+                                loadPage("Chatters");
+                            }));
+                })
+                .show();
+    }
+
+    private void requestReason(
+            String title, String prompt, boolean required,
+            java.util.function.Consumer<String> onConfirm) {
+        LinearLayout form = formLayout();
+        TextView message = new TextView(this);
+        message.setText(prompt);
+        form.addView(message);
+        EditText reason = field(required ? "Reason (required)" : "Reason (optional)");
+        reason.setSingleLine(false);
+        reason.setMinLines(2);
+        form.addView(reason);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setView(form)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Continue", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String value = reason.getText().toString().trim();
+                    if (required && value.length() < 3) {
+                        toast("Enter a reason of at least 3 characters.");
+                        return;
+                    }
+                    dialog.dismiss();
+                    onConfirm.accept(value);
+                }));
+        dialog.show();
+    }
+
+    private void changeChatterState(String id, String action, String reason) {
+        JSONObject body = new JSONObject();
+        try {
+            if ("ban".equals(action) || "unban".equals(action)) {
+                body.put("reason", reason);
+            } else if (!reason.isEmpty()) {
+                body.put("reason", reason);
+            }
+        } catch (JSONException error) {
+            toast("Unable to prepare account action.");
+            return;
+        }
+        api.post("/api/v1/admin/chatters/" + id + "/" + action, body, callback(result -> {
+            toast("Chatter account updated.");
+            loadPage("Chatters");
+        }));
+    }
+
+    private void chooseModelsForChatter(String chatterId, JSONArray assignedModels) {
+        Set<String> assignedIds = new HashSet<>();
+        if (assignedModels != null) {
+            for (int i = 0; i < assignedModels.length(); i++) {
+                JSONObject assignment = assignedModels.optJSONObject(i);
+                if (assignment != null) assignedIds.add(assignment.optString("modelId", ""));
+            }
+        }
+        api.get("/api/v1/admin/models?page=1&limit=100", callback(result -> {
+            JSONArray models = result.optJSONArray("items");
+            if (models == null) models = new JSONArray();
+            List<JSONObject> eligible = new ArrayList<>();
+            for (int i = 0; i < models.length(); i++) {
+                JSONObject model = models.optJSONObject(i);
+                if (model == null || !isModelActive(model)
+                        || assignedIds.contains(model.optString("_id", ""))) continue;
+                eligible.add(model);
+            }
+            if (eligible.isEmpty()) {
+                toast("No unassigned active models are available.");
+                return;
+            }
+            String[] labels = new String[eligible.size()];
+            boolean[] checked = new boolean[eligible.size()];
+            for (int i = 0; i < eligible.size(); i++) {
+                labels[i] = eligible.get(i).optString("displayName", "Model");
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Assign models")
+                    .setMultiChoiceItems(labels, checked, (dialog, which, selected) ->
+                            checked[which] = selected)
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Assign", (dialog, which) -> {
+                        JSONArray modelIds = new JSONArray();
+                        for (int i = 0; i < eligible.size(); i++) {
+                            if (checked[i]) modelIds.put(eligible.get(i).optString("_id"));
+                        }
+                        if (modelIds.length() == 0) {
+                            toast("Select at least one model.");
+                            return;
+                        }
+                        JSONObject body = new JSONObject();
+                        try {
+                            body.put("modelIds", modelIds);
+                        } catch (JSONException error) {
+                            toast("Unable to prepare model assignments.");
+                            return;
+                        }
+                        api.post("/api/v1/admin/chatters/" + chatterId + "/assignments",
+                                body, callback(saved -> {
+                                    toast("Models assigned.");
+                                    loadPage("Chatters");
+                                    showChatterProfile(chatterId);
+                                }));
+                    })
+                    .show();
+        }));
+    }
+
+    private void confirmChatterUnassignment(String chatterId, String assignmentId) {
+        new AlertDialog.Builder(this)
+                .setTitle("Unassign model?")
+                .setMessage("The chatter will lose access to this model's workspace.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Unassign", (dialog, which) ->
+                        api.delete("/api/v1/admin/assignments/" + assignmentId,
+                                callback(result -> {
+                                    loadPage("Chatters");
+                                    showChatterProfile(chatterId);
+                                })))
+                .show();
+    }
+
+    private void resetPassword(String id, String email) {
+        api.post("/api/v1/admin/chatters/" + id + "/password-reset", new JSONObject(),
+                callback(result -> showCredentials(
+                        "Chatter password reset",
+                        email,
+                        result.optString("temporaryPassword", ""))));
+    }
+
+    private void showCredentials(String title, String login, String password) {
+        LinearLayout panel = formLayout();
+        addMessageTo(panel, "This is an app login ID only; it is not a Gmail inbox.");
+        addCredentialField(panel, "LOGIN ID", login, "Copy Login ID", login);
+        addCredentialField(panel, "PASSWORD", password, "Copy Password", password);
+        Button copyAll = smallButton("Copy All Credentials");
+        copyAll.setBackgroundTintList(getColorStateList(R.color.lovanta_pink));
+        copyAll.setTextColor(getResources().getColor(R.color.white));
+        copyAll.setOnClickListener(v -> copyToClipboard(
+                "Chatter credentials", "Login ID: " + login + "\nPassword: " + password));
+        panel.addView(copyAll);
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setView(panel)
+                .setPositiveButton("Done", null)
+                .show();
+    }
+
+    private void addCredentialField(
+            LinearLayout panel, String label, String value, String buttonLabel, String copyValue) {
+        TextView labelView = new TextView(this);
+        labelView.setText(label);
+        labelView.setTextSize(12);
+        labelView.setTypeface(null, android.graphics.Typeface.BOLD);
+        labelView.setTextColor(getResources().getColor(R.color.lovanta_gray));
+        panel.addView(labelView);
+        TextView valueView = new TextView(this);
+        valueView.setText(value);
+        valueView.setTextIsSelectable(true);
+        valueView.setTextSize(16);
+        valueView.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        valueView.setPadding(0, dp(4), 0, dp(6));
+        panel.addView(valueView);
+        Button copy = smallButton(buttonLabel);
+        copy.setOnClickListener(v -> copyToClipboard(label, copyValue));
+        panel.addView(copy);
+    }
+
+    private void copyToClipboard(String label, String text) {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text));
+        toast(label + " copied.");
     }
 
     private void openModelManagement(JSONObject model) {
@@ -400,7 +962,7 @@ public class AdminActivity extends AppCompatActivity {
                 return;
             }
             api.patch("/api/v1/admin/subscribers/" + subscriber.optString("_id") + "/status",
-                    body, callback(result -> loadPage("Subscribers")));
+                    body, callback(result -> loadPage("Account Management")));
         });
         card.addView(status);
     }
@@ -409,7 +971,7 @@ public class AdminActivity extends AppCompatActivity {
         Button remove = smallButton("Remove assignment");
         remove.setOnClickListener(v -> api.delete(
                 "/api/v1/admin/assignments/" + assignment.optString("_id"),
-                callback(result -> loadPage("Assignments"))));
+                callback(result -> loadPage("Model Assignments"))));
         card.addView(remove);
     }
 
@@ -450,146 +1012,18 @@ public class AdminActivity extends AppCompatActivity {
     }
 
     private void createChatter() {
-        api.get("/api/v1/admin/models?page=1&limit=100", callback(result -> {
-            cachedModels = result.optJSONArray("items") == null
-                    ? new JSONArray() : result.optJSONArray("items");
-            showCreateChatterForm();
+        api.post("/api/v1/admin/chatters", new JSONObject(), callback(result -> {
+            JSONObject chatter = result.optJSONObject("chatter");
+            String email = chatter == null ? "" : chatter.optString("email", "");
+            String password = result.optString("temporaryPassword", "");
+            if (email.isEmpty() || password.isEmpty()) {
+                toast("Account may have been created. Use Reset Password to generate login details.");
+                loadPage("Chatters");
+                return;
+            }
+            showCredentials("Chatter account created", email, password);
+            loadPage("Chatters");
         }));
-    }
-
-    private void showCreateChatterForm() {
-        LinearLayout form = formLayout();
-        EditText name = field("Full name");
-        TextView loginInfo = new TextView(this);
-        loginInfo.setText("Login email and temporary password are generated automatically "
-                + "(chatter1@gmail.com, chatter2@gmail.com, ...).");
-        loginInfo.setTextColor(getResources().getColor(R.color.lovanta_gray));
-        loginInfo.setTextSize(13);
-        EditText username = field("Username (optional)");
-        EditText commission = field("Commission rate % (optional)");
-        TextView assignmentLabel = new TextView(this);
-        assignmentLabel.setText("Assign to model");
-        assignmentLabel.setTextColor(getResources().getColor(R.color.lovanta_dark));
-        assignmentLabel.setTextSize(14);
-        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        labelParams.topMargin = dp(8);
-        assignmentLabel.setLayoutParams(labelParams);
-
-        List<String> modelIds = new ArrayList<>();
-        List<String> modelOptions = new ArrayList<>();
-        modelIds.add("");
-        modelOptions.add(cachedModels.length() == 0 ? "No models available" : "No assignment");
-        for (int i = 0; i < cachedModels.length(); i++) {
-            JSONObject model = cachedModels.optJSONObject(i);
-            if (model == null || !isModelActive(model)) continue;
-            String id = model.optString("_id", "");
-            if (id.isEmpty()) continue;
-            modelIds.add(id);
-            modelOptions.add(model.optString("displayName", "Model"));
-        }
-        Spinner modelAssignment = new Spinner(this);
-        ArrayAdapter<String> modelAdapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_item, modelOptions);
-        modelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        modelAssignment.setAdapter(modelAdapter);
-
-        commission.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        form.addView(name);
-        form.addView(loginInfo);
-        form.addView(username);
-        form.addView(commission);
-        form.addView(assignmentLabel);
-        form.addView(modelAssignment);
-        new AlertDialog.Builder(this).setTitle("Create chatter account").setView(form)
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Create", (dialog, which) -> {
-                    String staffName = name.getText().toString().trim();
-                    if (staffName.isEmpty()) {
-                        toast("Chatter name is required");
-                        return;
-                    }
-                    JSONObject body = new JSONObject();
-                    try {
-                        body.put("displayName", staffName);
-                        body.put("role", "CHATTER");
-                        if (!username.getText().toString().trim().isEmpty()) body.put("username", username.getText().toString().trim());
-                        if (!commission.getText().toString().trim().isEmpty()) body.put("commissionRate",
-                                Double.parseDouble(commission.getText().toString().trim()));
-                    } catch (JSONException | NumberFormatException error) {
-                        toast("Enter valid staff details");
-                        return;
-                    }
-                    api.post("/api/v1/admin/chatters", body, callback(result -> {
-                        JSONObject chatter = result.optJSONObject("chatter");
-                        String password = result.optString("temporaryPassword");
-                        String chatterEmail = chatter == null ? "" : chatter.optString("email", "");
-                        if (chatterEmail.isEmpty() || password.isEmpty()) {
-                            toast("Account may have been created, but login details were not returned. "
-                                    + "Check Chatters and reset the password if needed.");
-                            loadPage("Chatters");
-                            return;
-                        }
-                        String chatterId = chatter.optString("id", "");
-                        int selectedModel = modelAssignment.getSelectedItemPosition();
-                        String modelId = selectedModel >= 0 && selectedModel < modelIds.size()
-                                ? modelIds.get(selectedModel) : "";
-                        String modelName = selectedModel >= 0 && selectedModel < modelOptions.size()
-                                ? modelOptions.get(selectedModel) : "";
-                        if (modelId.isEmpty()) {
-                            showCreatedChatter(chatterEmail, password, "", null);
-                            loadPage("Chatters");
-                            return;
-                        }
-                        if (chatterId.isEmpty()) {
-                            showCreatedChatter(chatterEmail, password, modelName,
-                                    "The server did not return the new chatter ID.");
-                            loadPage("Chatters");
-                            return;
-                        }
-                        JSONObject assignment = new JSONObject();
-                        try {
-                            assignment.put("modelAccountId", modelId);
-                            assignment.put("workerIds", new JSONArray().put(chatterId));
-                        } catch (JSONException error) {
-                            showCreatedChatter(chatterEmail, password, modelName,
-                                    "Could not prepare the assignment request.");
-                            loadPage("Chatters");
-                            return;
-                        }
-                        api.post("/api/v1/admin/assignments", assignment,
-                                callback(assigned -> {
-                                    showCreatedChatter(chatterEmail, password, modelName, null);
-                                    loadPage("Chatters");
-                                }, error -> {
-                                    showCreatedChatter(chatterEmail, password, modelName, error);
-                                    loadPage("Chatters");
-                                }));
-                    }));
-                }).show();
-    }
-
-    private void showCreatedChatter(
-            String email, String password, String assignedModel, String assignmentError) {
-        StringBuilder message = new StringBuilder();
-        message.append("Email: ").append(email)
-                .append("\nTemporary password: ").append(password);
-        if (assignmentError != null) {
-            message.append("\n\nAccount created, but automatic assignment to ")
-                    .append(assignedModel)
-                    .append(" failed: ").append(assignmentError)
-                    .append("\nYou can assign this chatter later.");
-        } else if (!assignedModel.isEmpty()) {
-            message.append("\nAssigned to: ").append(assignedModel);
-        } else {
-            message.append("\nNot assigned to a model yet.");
-        }
-        message.append("\n\nSave these login details now; the password will not be shown again.");
-        new AlertDialog.Builder(this)
-                .setTitle("Chatter account created")
-                .setMessage(message.toString())
-                .setPositiveButton("Done", null)
-                .show();
     }
 
     private void beginAssignment() {
@@ -656,27 +1090,9 @@ public class AdminActivity extends AppCompatActivity {
                     }
                     api.post("/api/v1/admin/assignments", body, callback(result -> {
                         toast("Assignment saved");
-                        loadPage("Assignments");
+                        loadPage("Model Assignments");
                     }));
                 }).show();
-    }
-
-    private void resetPassword(String id) {
-        api.post("/api/v1/admin/chatters/" + id + "/password-reset", new JSONObject(), callback(result ->
-                new AlertDialog.Builder(this)
-                        .setTitle("Temporary password")
-                        .setMessage(result.optString("temporaryPassword") + "\n\nShare securely. The chatter must change it.")
-                        .setPositiveButton("Done", null)
-                        .show()));
-    }
-
-    private void changeStaffStatus(String id, boolean suspended) {
-        JSONObject body = new JSONObject();
-        try { body.put("suspended", suspended); } catch (JSONException ignored) { return; }
-        api.patch("/api/v1/admin/chatters/" + id + "/status", body, callback(result -> {
-            toast(suspended ? "Staff suspended" : "Staff reactivated");
-            loadPage("Chatters");
-        }));
     }
 
     private void preloadDirectoryData() {
@@ -743,30 +1159,45 @@ public class AdminActivity extends AppCompatActivity {
         finish();
     }
 
-    private void addMetric(String name, String value, String detail) {
-        LinearLayout tile = card();
-        tile.setOrientation(LinearLayout.HORIZONTAL);
-        tile.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout texts = new LinearLayout(this);
-        texts.setOrientation(LinearLayout.VERTICAL);
-        TextView heading = new TextView(this);
-        heading.setText(name);
-        heading.setTextSize(13);
-        heading.setTextColor(getResources().getColor(R.color.lovanta_gray));
-        TextView number = new TextView(this);
-        number.setText(value);
-        number.setTextSize(24);
-        number.setTypeface(null, android.graphics.Typeface.BOLD);
-        number.setTextColor(getResources().getColor(R.color.lovanta_dark));
-        TextView sub = new TextView(this);
-        sub.setText(detail);
-        sub.setTextSize(12);
-        sub.setTextColor(getResources().getColor(R.color.lovanta_gray));
-        texts.addView(heading);
-        texts.addView(number);
-        texts.addView(sub);
-        tile.addView(texts);
-        content.addView(tile);
+    private void addMetricRow(String[] labels, String[] values) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < labels.length; i++) {
+            LinearLayout tile = new LinearLayout(this);
+            tile.setOrientation(LinearLayout.VERTICAL);
+            tile.setBackgroundResource(R.drawable.bg_skeumorphic_card);
+            tile.setPadding(dp(12), dp(10), dp(12), dp(10));
+            TextView label = new TextView(this);
+            label.setText(labels[i]);
+            label.setTextSize(12);
+            label.setTextColor(getResources().getColor(R.color.lovanta_gray));
+            TextView value = new TextView(this);
+            value.setText(values[i]);
+            value.setTextSize(20);
+            value.setTypeface(null, android.graphics.Typeface.BOLD);
+            value.setTextColor(getResources().getColor(R.color.lovanta_dark));
+            tile.addView(label);
+            tile.addView(value);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    labels.length == 1 ? -1 : 0, -2, labels.length == 1 ? 0 : 1);
+            if (i > 0) params.leftMargin = dp(8);
+            row.addView(tile, params);
+        }
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(-1, -2);
+        rowParams.bottomMargin = dp(8);
+        content.addView(row, rowParams);
+    }
+
+    private void addActivityLine(String primary, String secondary) {
+        TextView line = new TextView(this);
+        line.setText(primary + (secondary.isEmpty() ? "" : "\n" + secondary));
+        line.setTextSize(13);
+        line.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        line.setPadding(dp(4), dp(8), dp(4), dp(8));
+        content.addView(line);
+        View divider = new View(this);
+        divider.setBackgroundColor(getResources().getColor(R.color.lovanta_border));
+        content.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
     }
 
     private void addSectionTitle(String text) {
@@ -837,6 +1268,12 @@ public class AdminActivity extends AppCompatActivity {
 
     private String money(double value) {
         return String.format(java.util.Locale.getDefault(), "$%.2f", value);
+    }
+
+    private String jsonDisplayValue(JSONObject object, String key, String fallback) {
+        if (object == null || object.isNull(key)) return fallback;
+        String value = object.optString(key, "");
+        return value.isEmpty() ? fallback : value;
     }
 
     private void toast(String message) {

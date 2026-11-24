@@ -19,8 +19,20 @@ const workerSchema = new Schema(
       required: true,
       default: "CHATTER",
     },
+    status: {
+      type: String,
+      enum: ["ACTIVE", "DISABLED", "BANNED", "ARCHIVED"],
+      required: true,
+      default: "ACTIVE",
+    },
     active: { type: Boolean, required: true, default: true },
     suspendedAt: { type: Date, default: null },
+    disabledAt: { type: Date, default: null },
+    disabledReason: { type: String, trim: true, maxlength: 500, default: "" },
+    bannedAt: { type: Date, default: null },
+    banReason: { type: String, trim: true, maxlength: 500, default: "" },
+    archivedAt: { type: Date, default: null },
+    createdBy: { type: Schema.Types.ObjectId, ref: "Worker", default: null },
     mustChangePassword: { type: Boolean, required: true, default: false },
     lastLoginAt: { type: Date, default: null },
     failedLoginAttempts: { type: Number, required: true, default: 0 },
@@ -30,6 +42,8 @@ const workerSchema = new Schema(
   },
   { timestamps: true },
 );
+
+workerSchema.index({ role: 1, status: 1, createdAt: -1 });
 
 export const Worker = model("Worker", workerSchema);
 export type WorkerRole = "ADMIN" | "SUPERVISOR" | "CHATTER" | "worker" | "admin";
