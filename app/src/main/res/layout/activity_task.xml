@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -13,7 +14,7 @@
         android:paddingTop="18dp"
         android:paddingEnd="20dp"
         android:paddingBottom="12dp"
-        android:text="Earnings &amp; commissions"
+        android:text="Task"
         android:textColor="@color/lovanta_dark"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -21,43 +22,149 @@
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="90dp"
+                android:orientation="horizontal"
+                android:baselineAligned="false">
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/bg_task_banner_pink"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="V Power"
+                        android:textColor="@color/lovanta_pink"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/tvTaskPeriod"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:text="Current period"
+                        android:textColor="@color/lovanta_dark"
+                        android:textSize="11sp" />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/bg_task_banner_yellow"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="New Match PPV"
+                        android:textColor="@color/white"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Unlock PPV in new conversations"
+                        android:textColor="@color/lovanta_dark"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp"
+                android:background="@drawable/bg_task_card"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="New Match PPV"
+                    android:textColor="@color/lovanta_pink"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/tvPaidCommission"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_task_timer"
+                    android:paddingStart="12dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="6dp"
+                    android:text="—"
+                    android:textColor="@color/lovanta_dark"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_skeumorphic_card"
+                android:background="@drawable/bg_task_header_yellow"
                 android:orientation="vertical"
-                android:padding="18dp">
-
+                android:padding="14dp">
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Commission summary"
-                    android:textColor="@color/lovanta_gray"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:id="@+id/tvCommissionTotal"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="—"
+                    android:text="Base Salary"
                     android:textColor="@color/lovanta_dark"
-                    android:textSize="30sp"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
-
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvPendingCommission"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:text="Totals from verified commission records"
+                    android:layout_marginTop="8dp"
+                    android:text="Pending commission: —"
+                    android:textColor="@color/lovanta_dark"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_task_card"
+                android:orientation="vertical"
+                android:padding="14dp">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="OG Bonus"
+                    android:textColor="@color/lovanta_pink"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Complete your assigned PPV milestones"
                     android:textColor="@color/lovanta_gray"
                     android:textSize="12sp" />
             </LinearLayout>
@@ -66,53 +173,54 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:background="@drawable/bg_skeumorphic_card"
+                android:background="@drawable/bg_task_card"
                 android:orientation="vertical"
-                android:padding="18dp">
-
+                android:padding="14dp">
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Pending"
-                    android:textColor="@color/lovanta_gray"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/tvPendingCommission"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="—"
-                    android:textColor="@color/lovanta_dark"
-                    android:textSize="22sp"
+                    android:text="Recall Your Old Match"
+                    android:textColor="@color/lovanta_pink"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Chat 10 old matches"
+                    android:textColor="@color/lovanta_dark"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:background="@drawable/bg_skeumorphic_card"
+                android:background="@drawable/bg_task_card"
                 android:orientation="vertical"
-                android:padding="18dp">
-
+                android:padding="14dp">
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Paid"
-                    android:textColor="@color/lovanta_gray"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/tvPaidCommission"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="—"
-                    android:textColor="@color/lovanta_dark"
-                    android:textSize="22sp"
+                    android:text="At least 1 PPV in Old Match"
+                    android:textColor="@color/lovanta_pink"
+                    android:textSize="16sp"
                     android:textStyle="bold" />
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Unlock 1 PPV in an old conversation"
+                    android:textColor="@color/lovanta_dark"
+                    android:textSize="12sp" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvCommissionTotal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                tools:text="$0.00" />
         </LinearLayout>
     </ScrollView>
 

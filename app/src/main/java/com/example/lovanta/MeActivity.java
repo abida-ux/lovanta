@@ -24,8 +24,8 @@ public class MeActivity extends AppCompatActivity {
             R.id.optionSkin, R.id.optionLogout
     };
     private static final String[] OPTION_LABELS = {
-            "Not configured", "Not configured", "Commissions", "Not configured",
-                "Earnings & commissions", "Activity data", "Not configured", "App Version", "Not configured", "Sign out"
+            "Online Admin", "Receiving Account", "Earning Details", "History Payroll",
+            "Salary Structure", "Data Center", "Deduction", "App Version", "Skin Setting", "Logout"
     };
     private static final int[] OPTION_ICONS = {
             R.drawable.ic_phone, R.drawable.ic_attach, R.drawable.ic_tab_data, R.drawable.ic_bell,
@@ -46,12 +46,12 @@ public class MeActivity extends AppCompatActivity {
         findViewById(R.id.tvStaffIdentifier).setTag("Staff ID: " + ApiClient.get(this).getWorkerId());
         ((TextView) findViewById(R.id.tvStaffIdentifier)).setText(
                 "Staff ID: " + ApiClient.get(this).getWorkerId());
-        findViewById(R.id.tvLevelProgress).setVisibility(View.GONE);
-        ((View) findViewById(R.id.tvBalance).getParent().getParent()).setVisibility(View.GONE);
-        ((View) findViewById(R.id.switchWithdraw).getParent().getParent()).setVisibility(View.GONE);
-        ((TextView) findViewById(R.id.tvStaffBadge)).setText("Staff");
-        findViewById(R.id.tvLevelNextUpdate).setVisibility(View.GONE);
+        ((TextView) findViewById(R.id.tvStaffBadge)).setText("1");
+        ((TextView) findViewById(R.id.tvLevelProgress)).setText("Start your PPV activity");
+        ((TextView) findViewById(R.id.tvLevelNextUpdate)).setText("Next level update: today");
+        ((TextView) findViewById(R.id.tvBalance)).setText("$0.00");
         loadModels();
+        loadSummary();
     }
 
     private void loadModels() {
@@ -95,6 +95,35 @@ public class MeActivity extends AppCompatActivity {
         });
     }
 
+    private void loadSummary() {
+        ApiClient.get(this).get("/api/v1/chatter/summary", new ApiClient.Callback() {
+            @Override
+            public void onSuccess(JSONObject result) {
+                double paidCommission = result.optDouble("paidCommission", 0);
+                int paidPpv = result.optInt("paidPpvPurchases", 0);
+                ((TextView) findViewById(R.id.tvBalance)).setText(
+                        String.format(java.util.Locale.getDefault(), "$%.2f", paidCommission));
+                int level = paidPpv >= 15 ? 2 : 1;
+                ((TextView) findViewById(R.id.tvStaffBadge)).setText(String.valueOf(level));
+                if (level == 1) {
+                    int remaining = Math.max(0, 15 - paidPpv);
+                    ((TextView) findViewById(R.id.tvLevelProgress)).setText(
+                            "Unlock " + remaining + " more PPV to reach LV 2");
+                } else {
+                    ((TextView) findViewById(R.id.tvLevelProgress)).setText("LV 2 unlocked");
+                }
+            }
+
+            @Override
+            public void onError(String message) {
+                if (!ApiClient.get(MeActivity.this).hasSession()) {
+                    startActivity(new Intent(MeActivity.this, LoginActivity.class));
+                    finish();
+                }
+            }
+        });
+    }
+
     private void setupOptions() {
         for (int i = 0; i < OPTION_IDS.length; i++) {
             int optionId = OPTION_IDS[i];
@@ -117,11 +146,6 @@ public class MeActivity extends AppCompatActivity {
             option.setClickable(true);
             option.setFocusable(true);
             option.setBackgroundResource(android.R.drawable.list_selector_background);
-            if (optionId == R.id.optionAdmin || optionId == R.id.optionReceiving
-                    || optionId == R.id.optionPayroll || optionId == R.id.optionDeduction
-                    || optionId == R.id.optionSkin) {
-                option.setVisibility(View.GONE);
-            }
             final int index = i;
             option.setOnClickListener(v -> handleOption(index));
         }

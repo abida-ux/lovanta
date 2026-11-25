@@ -98,11 +98,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupListeners() {
         chipAll.setOnClickListener(v -> filterChats("All"));
-        layoutNotificationBanner.setVisibility(View.GONE);
-        btnRenew.setVisibility(View.GONE);
-        chipUnread.setVisibility(View.GONE);
-        chipNewMatch.setVisibility(View.GONE);
-        chipStar.setVisibility(View.GONE);
+        chipUnread.setOnClickListener(v -> filterChats("Unread"));
+        chipNewMatch.setOnClickListener(v -> filterChats("New match"));
+        chipStar.setOnClickListener(v -> filterChats("Star"));
+        layoutNotificationBanner.setVisibility(View.VISIBLE);
     }
 
     private void filterChats(String filter) {

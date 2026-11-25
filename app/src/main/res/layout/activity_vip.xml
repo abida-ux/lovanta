@@ -13,7 +13,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="20dp"
         android:layout_marginTop="22dp"
-        android:text="Assigned conversations"
+        android:text="VIP Contacts"
         android:textColor="@color/lovanta_dark"
         android:textSize="26sp"
         android:textStyle="bold" />
@@ -24,7 +24,7 @@
         android:layout_marginStart="20dp"
         android:layout_marginTop="2dp"
         android:layout_marginBottom="16dp"
-        android:text="Current conversations for your assigned models"
+        android:text="Active VIP users in the past 14 days"
         android:textColor="@color/lovanta_gray"
         android:textSize="12sp" />
 

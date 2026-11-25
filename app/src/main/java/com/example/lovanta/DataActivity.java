@@ -39,12 +39,12 @@ public class DataActivity extends AppCompatActivity {
                 ((TextView) findViewById(R.id.tvPpvCount)).setText(result.optString("paidPpvPurchases", "0"));
                 LinearLayout sections = findViewById(R.id.dataSections);
                 sections.removeAllViews();
-                addMetricSection(sections, "Messages & sales", R.color.lovanta_pink, new String[][]{
+                addMetricSection(sections, "New Matches", R.color.lovanta_pink, new String[][]{
                         {"Messages sent", result.optString("messagesSent", "0")},
                         {"Successful sales", result.optString("successfulSales", "0")},
                         {"Sales amount", money(result.optDouble("salesAmount", 0))}
                 });
-                addMetricSection(sections, "Commission", R.color.lovanta_yellow, new String[][]{
+                addMetricSection(sections, "Old Matches", R.color.lovanta_pink, new String[][]{
                         {"Pending", money(result.optDouble("pendingCommission", 0))},
                         {"Paid", money(result.optDouble("paidCommission", 0))}
                 });

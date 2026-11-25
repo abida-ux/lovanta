@@ -10,6 +10,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONObject;
 
 import java.util.Locale;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class TaskActivity extends AppCompatActivity {
     @Override
@@ -18,6 +20,8 @@ public class TaskActivity extends AppCompatActivity {
         setContentView(R.layout.activity_task);
         ScreenInsets.applyToMainRoot(this);
         BottomNavigation.bind(this, R.id.navTask);
+        ((TextView) findViewById(R.id.tvTaskPeriod)).setText(
+                new SimpleDateFormat("MMM d", Locale.getDefault()).format(new Date()));
         loadSummary();
     }
 
