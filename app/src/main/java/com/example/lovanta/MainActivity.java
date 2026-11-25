@@ -26,9 +26,6 @@ public class MainActivity extends AppCompatActivity {
     private ImageView btnCloseBanner;
     private TextView chipAll, chipUnread, chipNewMatch, chipStar;
     private TextView tvEmptyChats;
-    private TextView tvChatterActiveChats;
-    private TextView tvChatterPpvSales;
-    private TextView tvChatterSales;
 
     private List<StoryItem> storyList;
     private List<ChatConversation> chatList;
@@ -67,9 +64,6 @@ public class MainActivity extends AppCompatActivity {
         chipNewMatch = findViewById(R.id.chipNewMatch);
         chipStar = findViewById(R.id.chipStar);
         tvEmptyChats = findViewById(R.id.tvEmptyChats);
-        tvChatterActiveChats = findViewById(R.id.tvChatterActiveChats);
-        tvChatterPpvSales = findViewById(R.id.tvChatterPpvSales);
-        tvChatterSales = findViewById(R.id.tvChatterSales);
 
     }
 
@@ -176,7 +170,6 @@ public class MainActivity extends AppCompatActivity {
                 boolean empty = chatList.isEmpty();
                 rvChats.setVisibility(empty ? View.GONE : View.VISIBLE);
                 tvEmptyChats.setVisibility(empty ? View.VISIBLE : View.GONE);
-                loadChatterSummary();
             }
 
             @Override
@@ -193,31 +186,6 @@ public class MainActivity extends AppCompatActivity {
                 tvEmptyChats.setOnClickListener(v -> loadWorkspace());
             }
         });
-    }
-
-    private void loadChatterSummary() {
-        ApiClient.get(this).get("/api/v1/chatter/summary", new ApiClient.Callback() {
-            @Override
-            public void onSuccess(JSONObject result) {
-                tvChatterActiveChats.setText(result.optString("activeConversations", "0"));
-                tvChatterPpvSales.setText(result.optString("paidPpvPurchases", "0"));
-                tvChatterSales.setText(formatMoney(result.optDouble("salesAmount", 0)));
-            }
-
-            @Override
-            public void onError(String message) {
-                if (!ApiClient.get(MainActivity.this).hasSession()) {
-                    startActivity(new Intent(MainActivity.this, LoginActivity.class));
-                    finish();
-                    return;
-                }
-                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
-            }
-        });
-    }
-
-    private String formatMoney(double amount) {
-        return String.format(java.util.Locale.getDefault(), "$%.2f", amount);
     }
 
     private String formatTime(String value) {
