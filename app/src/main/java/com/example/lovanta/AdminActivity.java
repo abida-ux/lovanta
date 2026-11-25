@@ -3,6 +3,7 @@ package com.example.lovanta;
 import android.content.Intent;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -10,6 +11,7 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.ContextThemeWrapper;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -34,7 +36,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class AdminActivity extends AppCompatActivity {
     private static final String[] PAGES = {
@@ -286,10 +291,11 @@ public class AdminActivity extends AppCompatActivity {
         content.setVisibility(View.VISIBLE);
         addSectionTitle("Management overview");
         addMetricRow(
-                new String[]{"Total models", "Active models"},
+                new String[]{"Total models", "Active models", "Disabled accounts"},
                 new String[]{
                         data.optString("totalModels", data.optString("models", "0")),
                         data.optString("activeModels", "0"),
+                        data.optString("disabledAccounts", "0"),
                 });
         addMetricRow(
                 new String[]{"Total chatters", "Active chatters"},
@@ -297,9 +303,6 @@ public class AdminActivity extends AppCompatActivity {
                         data.optString("totalChatters", data.optString("chatters", "0")),
                         data.optString("activeChatters", "0"),
                 });
-        addMetricRow(new String[]{"Disabled accounts"}, new String[]{
-                data.optString("disabledAccounts", "0"),
-        });
 
         addSectionTitle("Recent recruitment");
         JSONArray recruited = data.optJSONArray("recentRecruitment");
@@ -312,7 +315,7 @@ public class AdminActivity extends AppCompatActivity {
                 addActivityLine(
                         chatter.optString("displayName", "Chatter")
                                 + " · " + chatter.optString("email", ""),
-                        chatter.optString("createdAt", ""));
+                        formatDateTime(chatter.optString("createdAt", "")));
             }
         }
 
@@ -326,9 +329,9 @@ public class AdminActivity extends AppCompatActivity {
                 if (action == null) continue;
                 String reason = action.optString("reason", "");
                 addActivityLine(
-                        action.optString("action", "Action")
-                                + " · " + action.optString("affectedId", ""),
-                        action.optString("createdAt", "")
+                        formatAdminAction(action.optString("action", "Action"))
+                                + " · " + action.optString("affectedType", "Record"),
+                        formatDateTime(action.optString("createdAt", ""))
                                 + (reason.isEmpty() ? "" : " · " + reason));
             }
         }
@@ -445,16 +448,17 @@ public class AdminActivity extends AppCompatActivity {
                         + "\n@" + row.optString("username", "—") + " · " + row.optString("status", "active")
                         + "\n" + row.optString("description", "");
             case "Chatters":
-                return row.optString("email", "") + " · " + (row.optBoolean("active", false) ? "Active" : "Suspended")
-                        + "\nLast login: " + row.optString("lastLoginAt", "Not available");
+                return "Status: " + row.optString("status", "—")
+                        + "\nLast login: " + jsonDisplayValue(row, "lastLoginAt", "Never");
             case "Model Assignments":
                 return "Status: " + row.optString("status", row.optBoolean("active") ? "active" : "removed")
-                        + " · Assigned: " + row.optString("assignedAt", "—");
+                        + " · Assigned: " + jsonDisplayValue(row, "assignedAt", "—");
             case "Account Management":
-                return "Status: " + row.optString("status", "—") + " · Registered: " + row.optString("createdAt", "—");
+                return "Status: " + row.optString("status", "—")
+                        + " · Registered: " + jsonDisplayValue(row, "createdAt", "—");
             default:
                 return row.optString("actorRole", "") + " · " + row.optString("affectedType", "")
-                        + " " + row.optString("affectedId", "") + "\n" + row.optString("createdAt", "");
+                        + "\n" + jsonDisplayValue(row, "createdAt", "—");
         }
     }
 
@@ -470,7 +474,7 @@ public class AdminActivity extends AppCompatActivity {
         horizontal.setHorizontalScrollBarEnabled(true);
         LinearLayout table = new LinearLayout(this);
         table.setOrientation(LinearLayout.VERTICAL);
-        int[] widths = {130, 190, 170, 100, 150, 150, 125};
+        int[] widths = {82, 190, 170, 100, 150, 150, 125};
         String[] headers = {"Staff ID", "Login identifier", "Assigned models",
                 "Status", "Created", "Last login", "Actions"};
         table.addView(chatterTableRow(headers, widths, true));
@@ -504,18 +508,29 @@ public class AdminActivity extends AppCompatActivity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        if (header) row.setBackgroundColor(getResources().getColor(R.color.lovanta_surface));
+        row.setMinimumHeight(dp(header ? 42 : 52));
+        if (header) {
+            row.setBackgroundColor(getResources().getColor(R.color.lovanta_pink_light));
+        } else {
+            row.setBackgroundResource(android.R.drawable.list_selector_background);
+        }
         for (int i = 0; i < widths.length; i++) {
             TextView cell = new TextView(this);
             cell.setText(values[i]);
             cell.setTextSize(header ? 12 : 11);
-            cell.setTextColor(getResources().getColor(
-                    header ? R.color.lovanta_dark : R.color.lovanta_gray));
+            cell.setTextColor(getResources().getColor(R.color.lovanta_dark));
             cell.setPadding(dp(8), dp(10), dp(8), dp(10));
             cell.setMaxLines(2);
             cell.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            if (header) cell.setTypeface(null, android.graphics.Typeface.BOLD);
-            if (!header && i == 3 && "ACTIVE".equals(values[i])) {
+            if (header || (!header && (i == 0 || i == 3 || i == 6))) {
+                cell.setTypeface(null, android.graphics.Typeface.BOLD);
+            }
+            if (!header && i == 3) {
+                int statusColor = "ACTIVE".equals(values[i])
+                        ? R.color.lovanta_pink
+                        : "BANNED".equals(values[i]) ? R.color.lovanta_yellow_dark : R.color.lovanta_gray;
+                cell.setTextColor(getResources().getColor(statusColor));
+            } else if (!header && i == 6) {
                 cell.setTextColor(getResources().getColor(R.color.lovanta_pink));
             }
             row.addView(cell, new LinearLayout.LayoutParams(dp(widths[i]), -2));
@@ -561,7 +576,9 @@ public class AdminActivity extends AppCompatActivity {
         panel.addView(profileLine("Role", chatter.optString("role", "CHATTER")));
         panel.addView(profileLine("Created", jsonDisplayValue(chatter, "createdAt", "—")));
         panel.addView(profileLine("Last login", jsonDisplayValue(chatter, "lastLoginAt", "Never")));
-        panel.addView(profileLine("Created by admin", jsonDisplayValue(chatter, "createdBy", "—")));
+        if (!chatter.isNull("createdBy")) {
+            panel.addView(profileLine("Created by", "Administrator"));
+        }
         if ("DISABLED".equals(status) && !chatter.optString("disabledReason", "").isEmpty()) {
             panel.addView(profileLine("Disable reason", chatter.optString("disabledReason")));
         }
@@ -603,15 +620,14 @@ public class AdminActivity extends AppCompatActivity {
                 if (entry == null) continue;
                 String reason = entry.optString("reason", "");
                 addMessageTo(panel,
-                        entry.optString("action", "Action")
-                                + " · Admin " + entry.optString("adminId", "—")
-                                + "\n" + entry.optString("createdAt", "")
+                        formatAdminAction(entry.optString("action", "Action"))
+                                + "\n" + formatDateTime(entry.optString("createdAt", ""))
                                 + (reason.isEmpty() ? "" : "\nReason: " + reason));
             }
         }
 
         addSectionTo(panel, "Account actions");
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        AlertDialog dialog = dialogBuilder()
                 .setTitle(email.isEmpty() ? "Chatter profile" : email)
                 .setView(scroll)
                 .setPositiveButton("Done", null)
@@ -663,13 +679,28 @@ public class AdminActivity extends AppCompatActivity {
         dialog.show();
     }
 
-    private TextView profileLine(String label, String value) {
-        TextView line = new TextView(this);
-        line.setText(label + ": " + (value.isEmpty() ? "—" : value));
-        line.setTextSize(13);
-        line.setTextColor(getResources().getColor(R.color.lovanta_dark));
-        line.setPadding(0, dp(4), 0, dp(4));
-        return line;
+    private LinearLayout profileLine(String label, String value) {
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(9), 0, dp(9));
+        TextView name = new TextView(this);
+        name.setText(label);
+        name.setTextSize(12);
+        name.setTextColor(getResources().getColor(R.color.lovanta_gray));
+        row.addView(name, new LinearLayout.LayoutParams(dp(112), -2));
+        TextView contentValue = new TextView(this);
+        contentValue.setText(value.isEmpty() ? "—" : value);
+        contentValue.setTextSize(13);
+        contentValue.setTypeface(null, android.graphics.Typeface.BOLD);
+        contentValue.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        row.addView(contentValue, new LinearLayout.LayoutParams(0, -2, 1));
+        container.addView(row);
+        View divider = new View(this);
+        divider.setBackgroundColor(getResources().getColor(R.color.lovanta_border));
+        container.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+        return container;
     }
 
     private void addSectionTo(LinearLayout target, String label) {
@@ -677,9 +708,9 @@ public class AdminActivity extends AppCompatActivity {
         heading.setText(label);
         heading.setTextSize(14);
         heading.setTypeface(null, android.graphics.Typeface.BOLD);
-        heading.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        heading.setTextColor(getResources().getColor(R.color.lovanta_pink));
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-        params.topMargin = dp(12);
+        params.topMargin = dp(target.getChildCount() == 0 ? 2 : 14);
         target.addView(heading, params);
     }
 
@@ -687,13 +718,21 @@ public class AdminActivity extends AppCompatActivity {
         TextView text = new TextView(this);
         text.setText(message);
         text.setTextSize(12);
-        text.setTextColor(getResources().getColor(R.color.lovanta_gray));
-        text.setPadding(0, dp(4), 0, dp(4));
-        target.addView(text);
+        text.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        text.setPadding(dp(12), dp(10), dp(12), dp(10));
+        text.setBackgroundResource(R.drawable.bg_skeumorphic_card);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(6);
+        target.addView(text, params);
     }
 
     private void addProfileAction(LinearLayout target, String label, Runnable action) {
         Button button = smallButton(label);
+        if ("Ban account".equals(label) || "Archive account".equals(label)) {
+            button.setBackgroundTintList(ColorStateList.valueOf(
+                    getResources().getColor(R.color.lovanta_pink)));
+            button.setTextColor(getResources().getColor(R.color.white));
+        }
         button.setOnClickListener(v -> action.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(42));
         params.topMargin = dp(5);
@@ -702,7 +741,7 @@ public class AdminActivity extends AppCompatActivity {
 
     private void requestAccountStatus(String id, String status) {
         String action = "DISABLED".equals(status) ? "Disable" : "Reactivate";
-        new AlertDialog.Builder(this)
+        dialogBuilder()
                 .setTitle(action + " chatter account?")
                 .setMessage("This will invalidate the chatter's active sessions.")
                 .setNegativeButton("Cancel", null)
@@ -734,7 +773,7 @@ public class AdminActivity extends AppCompatActivity {
         reason.setSingleLine(false);
         reason.setMinLines(2);
         form.addView(reason);
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        AlertDialog dialog = dialogBuilder()
                 .setTitle(title)
                 .setView(form)
                 .setNegativeButton("Cancel", null)
@@ -798,7 +837,7 @@ public class AdminActivity extends AppCompatActivity {
             for (int i = 0; i < eligible.size(); i++) {
                 labels[i] = eligible.get(i).optString("displayName", "Model");
             }
-            new AlertDialog.Builder(this)
+            dialogBuilder()
                     .setTitle("Assign models")
                     .setMultiChoiceItems(labels, checked, (dialog, which, selected) ->
                             checked[which] = selected)
@@ -831,7 +870,7 @@ public class AdminActivity extends AppCompatActivity {
     }
 
     private void confirmChatterUnassignment(String chatterId, String assignmentId) {
-        new AlertDialog.Builder(this)
+        dialogBuilder()
                 .setTitle("Unassign model?")
                 .setMessage("The chatter will lose access to this model's workspace.")
                 .setNegativeButton("Cancel", null)
@@ -870,7 +909,7 @@ public class AdminActivity extends AppCompatActivity {
         copyAll.setOnClickListener(v -> copyToClipboard(
                 "Chatter credentials", "Login ID: " + login + "\nPassword: " + password));
         panel.addView(copyAll);
-        new AlertDialog.Builder(this)
+        dialogBuilder()
                 .setTitle(title)
                 .setView(panel)
                 .setPositiveButton("Done", null)
@@ -890,8 +929,12 @@ public class AdminActivity extends AppCompatActivity {
         valueView.setTextIsSelectable(true);
         valueView.setTextSize(16);
         valueView.setTextColor(getResources().getColor(R.color.lovanta_dark));
-        valueView.setPadding(0, dp(4), 0, dp(6));
-        panel.addView(valueView);
+        valueView.setTypeface(null, android.graphics.Typeface.BOLD);
+        valueView.setBackgroundResource(R.drawable.bg_admin_input);
+        valueView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        LinearLayout.LayoutParams valueParams = new LinearLayout.LayoutParams(-1, -2);
+        valueParams.bottomMargin = dp(6);
+        panel.addView(valueView, valueParams);
         Button copy = smallButton(buttonLabel);
         copy.setOnClickListener(v -> copyToClipboard(label, copyValue));
         panel.addView(copy);
@@ -943,7 +986,7 @@ public class AdminActivity extends AppCompatActivity {
         description.setText(model.optString("description"));
         form.addView(name);
         form.addView(description);
-        new AlertDialog.Builder(this).setTitle("Edit model").setView(form)
+        dialogBuilder().setTitle("Edit model").setView(form)
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Save", (dialog, which) -> {
                     JSONObject body = new JSONObject();
@@ -992,7 +1035,7 @@ public class AdminActivity extends AppCompatActivity {
         form.addView(username);
         form.addView(avatar);
         form.addView(description);
-        new AlertDialog.Builder(this).setTitle("Create model profile").setView(form)
+        dialogBuilder().setTitle("Create model profile").setView(form)
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Create", (dialog, which) -> {
                     if (name.getText().toString().trim().isEmpty()) {
@@ -1058,7 +1101,7 @@ public class AdminActivity extends AppCompatActivity {
         for (int i = 0; i < eligibleModels.size(); i++) {
             names[i] = eligibleModels.get(i).optString("displayName");
         }
-        new AlertDialog.Builder(this).setTitle("Choose model")
+        dialogBuilder().setTitle("Choose model")
                 .setItems(names, (dialog, index) -> chooseChatters(eligibleModels.get(index)))
                 .setNegativeButton("Cancel", null).show();
     }
@@ -1078,7 +1121,7 @@ public class AdminActivity extends AppCompatActivity {
         String[] names = new String[eligible.size()];
         boolean[] selected = new boolean[eligible.size()];
         for (int i = 0; i < eligible.size(); i++) names[i] = eligible.get(i).optString("displayName");
-        new AlertDialog.Builder(this).setTitle("Select chatter(s)")
+        dialogBuilder().setTitle("Select chatter(s)")
                 .setMultiChoiceItems(names, selected, (dialog, index, checked) -> selected[index] = checked)
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Assign", (dialog, which) -> {
@@ -1174,18 +1217,21 @@ public class AdminActivity extends AppCompatActivity {
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setBackgroundResource(R.drawable.bg_skeumorphic_card);
-            tile.setPadding(dp(12), dp(10), dp(12), dp(10));
+            tile.setGravity(Gravity.CENTER_VERTICAL);
+            tile.setPadding(dp(14), dp(12), dp(14), dp(12));
             TextView label = new TextView(this);
             label.setText(labels[i]);
-            label.setTextSize(12);
+            label.setTextSize(11);
             label.setTextColor(getResources().getColor(R.color.lovanta_gray));
             TextView value = new TextView(this);
             value.setText(values[i]);
-            value.setTextSize(20);
+            value.setTextSize(23);
             value.setTypeface(null, android.graphics.Typeface.BOLD);
-            value.setTextColor(getResources().getColor(R.color.lovanta_dark));
+            value.setTextColor(getResources().getColor(R.color.lovanta_pink));
+            value.setPadding(0, dp(4), 0, 0);
             tile.addView(label);
             tile.addView(value);
+            tile.setMinimumHeight(dp(74));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     labels.length == 1 ? -1 : 0, -2, labels.length == 1 ? 0 : 1);
             if (i > 0) params.leftMargin = dp(8);
@@ -1197,15 +1243,32 @@ public class AdminActivity extends AppCompatActivity {
     }
 
     private void addActivityLine(String primary, String secondary) {
-        TextView line = new TextView(this);
-        line.setText(primary + (secondary.isEmpty() ? "" : "\n" + secondary));
-        line.setTextSize(13);
-        line.setTextColor(getResources().getColor(R.color.lovanta_dark));
-        line.setPadding(dp(4), dp(8), dp(4), dp(8));
-        content.addView(line);
-        View divider = new View(this);
-        divider.setBackgroundColor(getResources().getColor(R.color.lovanta_border));
-        content.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+        LinearLayout entry = new LinearLayout(this);
+        entry.setGravity(Gravity.CENTER_VERTICAL);
+        entry.setBackgroundResource(R.drawable.bg_skeumorphic_card);
+        entry.setPadding(dp(12), dp(10), dp(12), dp(10));
+        View accent = new View(this);
+        accent.setBackgroundResource(R.drawable.bg_pill_active);
+        entry.addView(accent, new LinearLayout.LayoutParams(dp(4), dp(34)));
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        text.setPadding(dp(10), 0, 0, 0);
+        TextView primaryText = new TextView(this);
+        primaryText.setText(primary);
+        primaryText.setTextSize(13);
+        primaryText.setTypeface(null, android.graphics.Typeface.BOLD);
+        primaryText.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        TextView secondaryText = new TextView(this);
+        secondaryText.setText(secondary);
+        secondaryText.setTextSize(11);
+        secondaryText.setTextColor(getResources().getColor(R.color.lovanta_gray));
+        secondaryText.setPadding(0, dp(3), 0, 0);
+        text.addView(primaryText);
+        if (!secondary.isEmpty()) text.addView(secondaryText);
+        entry.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(8);
+        content.addView(entry, params);
     }
 
     private void addSectionTitle(String text) {
@@ -1215,16 +1278,21 @@ public class AdminActivity extends AppCompatActivity {
         heading.setTextColor(getResources().getColor(R.color.lovanta_dark));
         heading.setTypeface(null, android.graphics.Typeface.BOLD);
         heading.setPadding(dp(2), dp(5), 0, dp(8));
-        content.addView(heading);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.topMargin = content.getChildCount() == 0 ? 0 : dp(10);
+        content.addView(heading, params);
     }
 
     private void addText(String text) {
         TextView view = new TextView(this);
         view.setText(text);
         view.setTextSize(14);
-        view.setTextColor(getResources().getColor(R.color.lovanta_gray));
-        view.setPadding(dp(4), dp(8), dp(4), dp(8));
-        content.addView(view);
+        view.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        view.setBackgroundResource(R.drawable.bg_skeumorphic_card);
+        view.setPadding(dp(14), dp(12), dp(14), dp(12));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(8);
+        content.addView(view, params);
     }
 
     private LinearLayout card() {
@@ -1250,17 +1318,36 @@ public class AdminActivity extends AppCompatActivity {
         EditText field = new EditText(this);
         field.setHint(hint);
         field.setSingleLine(true);
+        field.setTextSize(14);
+        field.setTextColor(getResources().getColor(R.color.lovanta_dark));
+        field.setHintTextColor(getResources().getColor(R.color.lovanta_gray));
+        field.setBackgroundResource(R.drawable.bg_admin_input);
+        field.setPadding(dp(12), dp(10), dp(12), dp(10));
+        field.setMinHeight(dp(48));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(8);
+        field.setLayoutParams(params);
         return field;
     }
 
     private Button smallButton(String text) {
         Button button = new Button(this);
         button.setText(text);
-        button.setTextSize(11);
+        button.setTextSize(12);
         button.setAllCaps(false);
-        button.setMinHeight(dp(38));
-        button.setPadding(dp(4), 0, dp(4), 0);
+        button.setTypeface(null, android.graphics.Typeface.BOLD);
+        button.setMinHeight(dp(40));
+        button.setMinWidth(0);
+        button.setPadding(dp(10), 0, dp(10), 0);
+        button.setBackgroundTintList(ColorStateList.valueOf(
+                getResources().getColor(R.color.lovanta_pink_light)));
+        button.setTextColor(getResources().getColor(R.color.lovanta_pink));
         return button;
+    }
+
+    private AlertDialog.Builder dialogBuilder() {
+        return new AlertDialog.Builder(
+                new ContextThemeWrapper(this, R.style.ThemeOverlay_Lovanta_AdminDialog));
     }
 
     private LinearLayout.LayoutParams weightedButton() {
@@ -1278,10 +1365,27 @@ public class AdminActivity extends AppCompatActivity {
         return String.format(java.util.Locale.getDefault(), "$%.2f", value);
     }
 
+    private String formatAdminAction(String action) {
+        String readable = action.replace('.', ' ').replace('_', ' ').trim();
+        if (readable.isEmpty()) return "Administrative action";
+        return Character.toUpperCase(readable.charAt(0)) + readable.substring(1);
+    }
+
     private String jsonDisplayValue(JSONObject object, String key, String fallback) {
         if (object == null || object.isNull(key)) return fallback;
         String value = object.optString(key, "");
-        return value.isEmpty() ? fallback : value;
+        return value.isEmpty() ? fallback
+                : key.endsWith("At") ? formatDateTime(value) : value;
+    }
+
+    private String formatDateTime(String value) {
+        if (value == null || value.isEmpty()) return "—";
+        try {
+            return new SimpleDateFormat("MMM d, yyyy · h:mm a", Locale.getDefault())
+                    .format(Date.from(java.time.Instant.parse(value)));
+        } catch (RuntimeException error) {
+            return value;
+        }
     }
 
     private void toast(String message) {

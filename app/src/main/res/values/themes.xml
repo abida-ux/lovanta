@@ -6,4 +6,11 @@
     </style>
 
     <style name="Theme.Lovanta" parent="Base.Theme.Lovanta" />
+
+    <style name="ThemeOverlay.Lovanta.AdminDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorPrimary">@color/lovanta_pink</item>
+        <item name="colorSecondary">@color/lovanta_pink</item>
+        <item name="android:colorAccent">@color/lovanta_pink</item>
+        <item name="colorSurface">@color/lovanta_surface</item>
+    </style>
 </resources>
