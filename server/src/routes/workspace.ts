@@ -11,6 +11,7 @@ import { PPVPurchase } from "../models/PPVPurchase.ts";
 import { Commission } from "../models/Commission.ts";
 import { Transaction } from "../models/Transaction.ts";
 import { parseInput } from "../utils/parseInput.ts";
+import { formatStaffNumber } from "../utils/staffNumber.ts";
 
 const router = Router();
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i);
@@ -53,7 +54,7 @@ router.get("/chatter/summary", async (req, res) => {
   ]);
 
   res.json({
-    staffNumber: worker.staffNumber,
+    staffNumber: formatStaffNumber(worker.staffNumber),
     assignedModels: modelIds.length,
     activeConversations,
     messagesSent,

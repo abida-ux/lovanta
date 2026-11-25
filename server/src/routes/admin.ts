@@ -20,7 +20,7 @@ import { Sequence } from "../models/Sequence.ts";
 import { HttpError } from "../errors/HttpError.ts";
 import { generateStrongPassword } from "../utils/generateStrongPassword.ts";
 import { parseInput } from "../utils/parseInput.ts";
-import { ensureStaffNumber, nextStaffNumber } from "../utils/staffNumber.ts";
+import { ensureStaffNumber, formatStaffNumber, nextStaffNumber } from "../utils/staffNumber.ts";
 
 const router = Router();
 router.use(authenticateWorker, authorize("ADMIN", "SUPERVISOR"));
@@ -436,9 +436,9 @@ router.get("/chatters", authorizePermission("chatters.read"), async (req, res) =
   ]);
   const items = await Promise.all(workerItems.map(async (item) => ({
     ...item,
-    staffNumber: typeof item.staffNumber === "number"
+    staffNumber: formatStaffNumber(typeof item.staffNumber === "number"
       ? item.staffNumber
-      : await ensureStaffNumber(item._id.toString()),
+      : await ensureStaffNumber(item._id.toString())),
   })));
   const assignments = items.length > 0
     ? await WorkerAssignment.find({
@@ -535,7 +535,7 @@ router.post("/chatters", authorize("ADMIN"), async (req, res) => {
   res.status(201).json({
     chatter: {
       id: created.id,
-      staffNumber: created.staffNumber,
+      staffNumber: formatStaffNumber(created.staffNumber),
       displayName: created.displayName,
       email: created.email,
       role: "CHATTER",
@@ -586,7 +586,7 @@ router.get("/chatters/:id", authorize("ADMIN"), async (req, res) => {
   res.json({
     chatter: {
       id: chatter._id.toString(),
-      staffNumber,
+      staffNumber: formatStaffNumber(staffNumber),
       displayName: chatter.displayName,
       email: chatter.email,
       role: chatter.role,

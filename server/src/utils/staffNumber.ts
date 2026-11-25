@@ -3,6 +3,10 @@ import { Worker } from "../models/Worker.ts";
 
 const STAFF_NUMBER_SEQUENCE_ID = "staff-number";
 
+export function formatStaffNumber(staffNumber: number): string {
+  return String(staffNumber).padStart(4, "0");
+}
+
 function isDuplicateKeyError(error: unknown): boolean {
   return typeof error === "object"
     && error !== null

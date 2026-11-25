@@ -78,7 +78,7 @@ public final class ApiClient {
         preferences().edit()
                 .putString(TOKEN, token)
                 .putString(WORKER_ID, workerId)
-                .putString(STAFF_NUMBER, staffNumber)
+                .putString(STAFF_NUMBER, formatStaffNumber(staffNumber))
                 .putString(ROLE, role)
                 .putBoolean(MUST_CHANGE_PASSWORD, mustChangePassword)
                 .apply();
@@ -113,12 +113,21 @@ public final class ApiClient {
     }
 
     public String getStaffNumber() {
-        return preferences().getString(STAFF_NUMBER, "");
+        return formatStaffNumber(preferences().getString(STAFF_NUMBER, ""));
     }
 
     public void saveStaffNumber(String staffNumber) {
         if (staffNumber == null || staffNumber.isEmpty()) return;
-        preferences().edit().putString(STAFF_NUMBER, staffNumber).apply();
+        preferences().edit().putString(STAFF_NUMBER, formatStaffNumber(staffNumber)).apply();
+    }
+
+    private String formatStaffNumber(String staffNumber) {
+        String value = staffNumber == null ? "" : staffNumber.trim();
+        if (value.isEmpty()) return "";
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) < '0' || value.charAt(i) > '9') return staffNumber;
+        }
+        return value.length() >= 4 ? value : "0000".substring(0, 4 - value.length()) + value;
     }
 
     public JSONObject getCachedChatterSummary() {
