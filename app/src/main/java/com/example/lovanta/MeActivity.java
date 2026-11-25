@@ -17,6 +17,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class MeActivity extends AppCompatActivity {
+    private static final long SUMMARY_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+    private ApiClient api;
+    private JSONObject cachedSummary;
 
     private static final int[] OPTION_IDS = {
             R.id.optionAdmin, R.id.optionReceiving, R.id.optionEarning, R.id.optionPayroll,
@@ -39,13 +42,14 @@ public class MeActivity extends AppCompatActivity {
         setContentView(R.layout.activity_me);
         ScreenInsets.applyToMainRoot(this);
         BottomNavigation.bind(this, R.id.navMe);
+        api = ApiClient.get(this);
 
         setupOptions();
         findViewById(R.id.tvStaffIdentifier).setContentDescription(
-                "Staff account " + ApiClient.get(this).getWorkerId());
-        findViewById(R.id.tvStaffIdentifier).setTag("Staff ID: " + ApiClient.get(this).getWorkerId());
+                "Staff account " + api.getWorkerId());
+        findViewById(R.id.tvStaffIdentifier).setTag("Staff ID: " + api.getWorkerId());
         ((TextView) findViewById(R.id.tvStaffIdentifier)).setText(
-                "Staff ID: " + ApiClient.get(this).getWorkerId());
+                "Staff ID: " + api.getWorkerId());
         ((TextView) findViewById(R.id.tvStaffBadge)).setText("1");
         ((TextView) findViewById(R.id.tvLevelProgress)).setText("Start your PPV activity");
         ((TextView) findViewById(R.id.tvLevelNextUpdate)).setText("Next level update: today");
@@ -96,32 +100,46 @@ public class MeActivity extends AppCompatActivity {
     }
 
     private void loadSummary() {
-        ApiClient.get(this).get("/api/v1/chatter/summary", new ApiClient.Callback() {
+        cachedSummary = api.getCachedChatterSummary();
+        if (cachedSummary != null) renderSummary(cachedSummary);
+        if (api.isChatterSummaryCacheFresh(SUMMARY_CACHE_MAX_AGE_MS)) return;
+
+        String summaryWorkerId = api.getWorkerId();
+        api.get("/api/v1/chatter/summary", new ApiClient.Callback() {
             @Override
             public void onSuccess(JSONObject result) {
-                double paidCommission = result.optDouble("paidCommission", 0);
-                int paidPpv = result.optInt("paidPpvPurchases", 0);
-                ((TextView) findViewById(R.id.tvBalance)).setText(
-                        String.format(java.util.Locale.getDefault(), "$%.2f", paidCommission));
-                int level = paidPpv >= 15 ? 2 : 1;
-                ((TextView) findViewById(R.id.tvStaffBadge)).setText(String.valueOf(level));
-                if (level == 1) {
-                    int remaining = Math.max(0, 15 - paidPpv);
-                    ((TextView) findViewById(R.id.tvLevelProgress)).setText(
-                            "Unlock " + remaining + " more PPV to reach LV 2");
-                } else {
-                    ((TextView) findViewById(R.id.tvLevelProgress)).setText("LV 2 unlocked");
-                }
+                api.cacheChatterSummary(summaryWorkerId, result);
+                cachedSummary = result;
+                renderSummary(result);
             }
 
             @Override
             public void onError(String message) {
-                if (!ApiClient.get(MeActivity.this).hasSession()) {
+                if (!api.hasSession()) {
                     startActivity(new Intent(MeActivity.this, LoginActivity.class));
                     finish();
+                    overridePendingTransition(0, 0);
+                } else if (cachedSummary == null) {
+                    Toast.makeText(MeActivity.this, message, Toast.LENGTH_LONG).show();
                 }
             }
         });
+    }
+
+    private void renderSummary(JSONObject result) {
+        double paidCommission = result.optDouble("paidCommission", 0);
+        int paidPpv = result.optInt("paidPpvPurchases", 0);
+        ((TextView) findViewById(R.id.tvBalance)).setText(
+                String.format(java.util.Locale.getDefault(), "$%.2f", paidCommission));
+        int level = paidPpv >= 15 ? 2 : 1;
+        ((TextView) findViewById(R.id.tvStaffBadge)).setText(String.valueOf(level));
+        if (level == 1) {
+            int remaining = Math.max(0, 15 - paidPpv);
+            ((TextView) findViewById(R.id.tvLevelProgress)).setText(
+                    "Unlock " + remaining + " more PPV to reach LV 2");
+        } else {
+            ((TextView) findViewById(R.id.tvLevelProgress)).setText("LV 2 unlocked");
+        }
     }
 
     private void setupOptions() {

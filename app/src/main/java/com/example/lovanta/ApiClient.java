@@ -109,6 +109,36 @@ public final class ApiClient {
         return preferences().getString(WORKER_ID, "");
     }
 
+    public JSONObject getCachedChatterSummary() {
+        String key = summaryCacheKey(getWorkerId());
+        String cached = preferences().getString(key, null);
+        if (cached == null) return null;
+        try {
+            return new JSONObject(cached);
+        } catch (JSONException error) {
+            Log.w(TAG, "Ignoring invalid cached chatter summary", error);
+            preferences().edit()
+                    .remove(key)
+                    .remove(key + "_updated")
+                    .apply();
+            return null;
+        }
+    }
+
+    public boolean isChatterSummaryCacheFresh(long maxAgeMillis) {
+        long updatedAt = preferences().getLong(summaryCacheKey(getWorkerId()) + "_updated", 0);
+        long age = System.currentTimeMillis() - updatedAt;
+        return updatedAt > 0 && age >= 0 && age < maxAgeMillis;
+    }
+
+    public void cacheChatterSummary(String workerId, JSONObject summary) {
+        String key = summaryCacheKey(workerId);
+        preferences().edit()
+                .putString(key, summary.toString())
+                .putLong(key + "_updated", System.currentTimeMillis())
+                .apply();
+    }
+
     public void login(String email, String password, Callback callback) {
         JSONObject body = new JSONObject();
         try {
@@ -272,6 +302,10 @@ public final class ApiClient {
 
     private String getToken() {
         return preferences().getString(TOKEN, null);
+    }
+
+    private String summaryCacheKey(String workerId) {
+        return "chatter_summary_" + workerId;
     }
 
     private String messageFor(Exception error) {

@@ -11,8 +11,12 @@ import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import android.content.Intent;
 
 public class DataActivity extends AppCompatActivity {
+    private static final long SUMMARY_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+    private ApiClient api;
+    private JSONObject cachedSummary;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,42 +30,54 @@ public class DataActivity extends AppCompatActivity {
         Date now = new Date();
         ((TextView) findViewById(R.id.tvDataDate)).setText(dateFormat.format(now));
         ((TextView) findViewById(R.id.tvDataDay)).setText(dayFormat.format(now));
-        ((TextView) findViewById(R.id.tvWorkerId)).setText("Staff ID: " + ApiClient.get(this).getWorkerId());
+        api = ApiClient.get(this);
+        ((TextView) findViewById(R.id.tvWorkerId)).setText("Staff ID: " + api.getWorkerId());
         ((TextView) findViewById(R.id.tvNewMatchesCount)).setText("—");
         ((TextView) findViewById(R.id.tvOldMatchesCount)).setText("—");
         ((TextView) findViewById(R.id.tvPpvCount)).setText("—");
 
-        ApiClient.get(this).get("/api/v1/chatter/summary", new ApiClient.Callback() {
+        cachedSummary = api.getCachedChatterSummary();
+        if (cachedSummary != null) renderSummary(cachedSummary);
+        if (api.isChatterSummaryCacheFresh(SUMMARY_CACHE_MAX_AGE_MS)) return;
+
+        String summaryWorkerId = api.getWorkerId();
+        api.get("/api/v1/chatter/summary", new ApiClient.Callback() {
             @Override
             public void onSuccess(JSONObject result) {
-                ((TextView) findViewById(R.id.tvNewMatchesCount)).setText(result.optString("assignedModels", "0"));
-                ((TextView) findViewById(R.id.tvOldMatchesCount)).setText(result.optString("activeConversations", "0"));
-                ((TextView) findViewById(R.id.tvPpvCount)).setText(result.optString("paidPpvPurchases", "0"));
-                LinearLayout sections = findViewById(R.id.dataSections);
-                sections.removeAllViews();
-                addMetricSection(sections, "New Matches", R.color.lovanta_pink, new String[][]{
-                        {"Messages sent", result.optString("messagesSent", "0")},
-                        {"Successful sales", result.optString("successfulSales", "0")},
-                        {"Sales amount", money(result.optDouble("salesAmount", 0))}
-                });
-                addMetricSection(sections, "Old Matches", R.color.lovanta_pink, new String[][]{
-                        {"Pending", money(result.optDouble("pendingCommission", 0))},
-                        {"Paid", money(result.optDouble("paidCommission", 0))}
-                });
+                api.cacheChatterSummary(summaryWorkerId, result);
+                cachedSummary = result;
+                renderSummary(result);
             }
 
             @Override
             public void onError(String message) {
-                Toast.makeText(DataActivity.this, message, Toast.LENGTH_LONG).show();
-                if (!ApiClient.get(DataActivity.this).hasSession()) {
-                    startActivity(new android.content.Intent(DataActivity.this, LoginActivity.class));
+                if (!api.hasSession()) {
+                    startActivity(new Intent(DataActivity.this, LoginActivity.class));
                     finish();
+                    overridePendingTransition(0, 0);
                     return;
                 }
-                ((TextView) findViewById(R.id.tvNewMatchesCount)).setText("—");
-                ((TextView) findViewById(R.id.tvOldMatchesCount)).setText("—");
-                ((TextView) findViewById(R.id.tvPpvCount)).setText("—");
+                if (cachedSummary == null) {
+                    Toast.makeText(DataActivity.this, message, Toast.LENGTH_LONG).show();
+                }
             }
+        });
+    }
+
+    private void renderSummary(JSONObject result) {
+        ((TextView) findViewById(R.id.tvNewMatchesCount)).setText(result.optString("assignedModels", "0"));
+        ((TextView) findViewById(R.id.tvOldMatchesCount)).setText(result.optString("activeConversations", "0"));
+        ((TextView) findViewById(R.id.tvPpvCount)).setText(result.optString("paidPpvPurchases", "0"));
+        LinearLayout sections = findViewById(R.id.dataSections);
+        sections.removeAllViews();
+        addMetricSection(sections, "New Matches", R.color.lovanta_pink, new String[][]{
+                {"Messages sent", result.optString("messagesSent", "0")},
+                {"Successful sales", result.optString("successfulSales", "0")},
+                {"Sales amount", money(result.optDouble("salesAmount", 0))}
+        });
+        addMetricSection(sections, "Old Matches", R.color.lovanta_pink, new String[][]{
+                {"Pending", money(result.optDouble("pendingCommission", 0))},
+                {"Paid", money(result.optDouble("paidCommission", 0))}
         });
     }
 

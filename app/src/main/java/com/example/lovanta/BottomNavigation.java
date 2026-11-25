@@ -39,9 +39,12 @@ final class BottomNavigation {
                 if (destination == MainActivity.class) {
                     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                     activity.startActivity(intent);
+                    activity.overridePendingTransition(0, 0);
                 } else {
                     activity.startActivity(intent);
+                    activity.overridePendingTransition(0, 0);
                     activity.finish();
+                    activity.overridePendingTransition(0, 0);
                 }
             });
         }
