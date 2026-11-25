@@ -53,6 +53,7 @@ router.get("/chatter/summary", async (req, res) => {
   ]);
 
   res.json({
+    staffNumber: worker.staffNumber,
     assignedModels: modelIds.length,
     activeConversations,
     messagesSent,

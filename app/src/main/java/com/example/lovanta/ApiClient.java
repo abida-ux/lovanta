@@ -40,6 +40,7 @@ public final class ApiClient {
     private static final String TAG = "LovantaApi";
     private static final String TOKEN = "token";
     private static final String WORKER_ID = "worker_id";
+    private static final String STAFF_NUMBER = "staff_number";
     private static final String ROLE = "role";
     private static final String MUST_CHANGE_PASSWORD = "must_change_password";
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(3);
@@ -72,10 +73,12 @@ public final class ApiClient {
         return instance;
     }
 
-    public void saveSession(String token, String workerId, String role, boolean mustChangePassword) {
+    public void saveSession(
+            String token, String workerId, String staffNumber, String role, boolean mustChangePassword) {
         preferences().edit()
                 .putString(TOKEN, token)
                 .putString(WORKER_ID, workerId)
+                .putString(STAFF_NUMBER, staffNumber)
                 .putString(ROLE, role)
                 .putBoolean(MUST_CHANGE_PASSWORD, mustChangePassword)
                 .apply();
@@ -107,6 +110,15 @@ public final class ApiClient {
 
     public String getWorkerId() {
         return preferences().getString(WORKER_ID, "");
+    }
+
+    public String getStaffNumber() {
+        return preferences().getString(STAFF_NUMBER, "");
+    }
+
+    public void saveStaffNumber(String staffNumber) {
+        if (staffNumber == null || staffNumber.isEmpty()) return;
+        preferences().edit().putString(STAFF_NUMBER, staffNumber).apply();
     }
 
     public JSONObject getCachedChatterSummary() {

@@ -51,6 +51,11 @@ Worker account status fields are additive; existing records are retained and leg
 `active`/`suspendedAt` values continue to block inactive accounts until they are
 updated through the account-management API.
 
+Staff accounts have a separate, sequential numeric `staffNumber` for display. MongoDB
+`_id` values remain unchanged for authentication, assignments, messages, and API
+references. Existing accounts receive a number on their next authenticated request;
+new accounts receive one at creation using an atomic MongoDB sequence.
+
 The model-management screen supports existing profile fields, status changes, public
 gallery URL management, and chatter assignments. Media file uploads and protected
 private-media delivery are not available until durable media storage is configured.

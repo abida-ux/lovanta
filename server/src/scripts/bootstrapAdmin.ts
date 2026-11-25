@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { env } from "../config/env.ts";
 import { Worker } from "../models/Worker.ts";
+import { nextStaffNumber } from "../utils/staffNumber.ts";
 
 async function bootstrapAdmin(): Promise<void> {
   if (!env.BOOTSTRAP_ADMIN_EMAIL) {
@@ -23,6 +24,7 @@ async function bootstrapAdmin(): Promise<void> {
     const worker = new Worker({
       email: env.BOOTSTRAP_ADMIN_EMAIL.toLowerCase(),
       displayName: env.BOOTSTRAP_ADMIN_NAME ?? "Platform Administrator",
+      staffNumber: await nextStaffNumber(),
       passwordHash: await bcrypt.hash(temporaryPassword, 12),
       role: "ADMIN",
       active: true,

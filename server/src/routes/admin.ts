@@ -20,6 +20,7 @@ import { Sequence } from "../models/Sequence.ts";
 import { HttpError } from "../errors/HttpError.ts";
 import { generateStrongPassword } from "../utils/generateStrongPassword.ts";
 import { parseInput } from "../utils/parseInput.ts";
+import { ensureStaffNumber, nextStaffNumber } from "../utils/staffNumber.ts";
 
 const router = Router();
 router.use(authenticateWorker, authorize("ADMIN", "SUPERVISOR"));
@@ -36,7 +37,7 @@ const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i);
 const CHATTER_SEQUENCE_ID = "chatter-login";
 const CHATTER_EMAIL_PATTERN = /^chatter(\d+)@gmail\.com$/i;
 const CHATTER_PROFILE_FIELDS =
-  "email displayName role status active suspendedAt createdAt lastLoginAt createdBy disabledAt disabledReason bannedAt banReason archivedAt";
+  "email displayName role staffNumber status active suspendedAt createdAt lastLoginAt createdBy disabledAt disabledReason bannedAt banReason archivedAt";
 
 type AuditDetails = {
   chatterId?: string;
@@ -428,11 +429,17 @@ router.get("/chatters", authorizePermission("chatters.read"), async (req, res) =
   }
 
   const filter = { $and: conditions };
-  const [items, total] = await Promise.all([
+  const [workerItems, total] = await Promise.all([
     Worker.find(filter).select(CHATTER_PROFILE_FIELDS)
       .sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Worker.countDocuments(filter),
   ]);
+  const items = await Promise.all(workerItems.map(async (item) => ({
+    ...item,
+    staffNumber: typeof item.staffNumber === "number"
+      ? item.staffNumber
+      : await ensureStaffNumber(item._id.toString()),
+  })));
   const assignments = items.length > 0
     ? await WorkerAssignment.find({
       workerId: { $in: items.map((item) => item._id) },
@@ -480,6 +487,7 @@ router.post("/chatters", authorize("ADMIN"), async (req, res) => {
   const passwordHash = await bcrypt.hash(temporaryPassword, 12);
   let created: {
     id: string;
+    staffNumber: number;
     email: string;
     displayName: string;
     createdAt: Date;
@@ -487,10 +495,12 @@ router.post("/chatters", authorize("ADMIN"), async (req, res) => {
 
   for (let attempt = 0; attempt < 100; attempt++) {
     const login = await nextGeneratedChatterLogin();
+    const staffNumber = await nextStaffNumber();
     const worker = new Worker({
       displayName: `Chatter ${login.number}`,
       email: login.email,
       role: "CHATTER",
+      staffNumber,
       status: "ACTIVE",
       active: true,
       createdBy: adminId,
@@ -501,6 +511,7 @@ router.post("/chatters", authorize("ADMIN"), async (req, res) => {
       await worker.save();
       created = {
         id: worker._id.toString(),
+        staffNumber,
         email: worker.email,
         displayName: worker.displayName,
         createdAt: worker.createdAt,
@@ -524,6 +535,7 @@ router.post("/chatters", authorize("ADMIN"), async (req, res) => {
   res.status(201).json({
     chatter: {
       id: created.id,
+      staffNumber: created.staffNumber,
       displayName: created.displayName,
       email: created.email,
       role: "CHATTER",
@@ -542,6 +554,9 @@ router.get("/chatters/:id", authorize("ADMIN"), async (req, res) => {
     role: { $in: ["CHATTER", "worker"] },
   }).select(CHATTER_PROFILE_FIELDS).lean();
   if (!chatter) throw new HttpError(404, "Chatter account not found");
+  const staffNumber = typeof chatter.staffNumber === "number"
+    ? chatter.staffNumber
+    : await ensureStaffNumber(chatter._id.toString());
 
   const [assignments, history] = await Promise.all([
     WorkerAssignment.find({ workerId: id, active: true })
@@ -571,6 +586,7 @@ router.get("/chatters/:id", authorize("ADMIN"), async (req, res) => {
   res.json({
     chatter: {
       id: chatter._id.toString(),
+      staffNumber,
       displayName: chatter.displayName,
       email: chatter.email,
       role: chatter.role,

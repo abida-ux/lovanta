@@ -42,13 +42,40 @@ public class MainActivity extends AppCompatActivity {
 
         initViews();
         ((View) findViewById(R.id.tvActiveTimer).getParent()).setVisibility(View.GONE);
-        ((TextView) findViewById(R.id.tvWorkerId)).setText(
-                "Staff ID: " + ApiClient.get(this).getWorkerId());
+        updateStaffNumber();
         setupStories();
         setupChats();
         setupListeners();
         loadWorkspace();
         BottomNavigation.bind(this, R.id.navChat);
+    }
+
+    private void updateStaffNumber() {
+        ApiClient api = ApiClient.get(this);
+        TextView staffId = findViewById(R.id.tvWorkerId);
+        String staffNumber = api.getStaffNumber();
+        staffId.setText("Staff ID: " + (staffNumber.isEmpty() ? "—" : staffNumber));
+        if (!staffNumber.isEmpty()) return;
+
+        api.get("/api/v1/auth/me", new ApiClient.Callback() {
+            @Override
+            public void onSuccess(JSONObject result) {
+                JSONObject worker = result.optJSONObject("worker");
+                if (worker == null) return;
+                String resolvedNumber = worker.optString("staffNumber", "");
+                api.saveStaffNumber(resolvedNumber);
+                staffId.setText("Staff ID: " + (resolvedNumber.isEmpty() ? "—" : resolvedNumber));
+            }
+
+            @Override
+            public void onError(String message) {
+                if (!api.hasSession() && !isFinishing()) {
+                    startActivity(new Intent(MainActivity.this, LoginActivity.class));
+                    finish();
+                    overridePendingTransition(0, 0);
+                }
+            }
+        });
     }
 
     private void initViews() {

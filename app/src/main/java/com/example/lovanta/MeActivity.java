@@ -46,10 +46,10 @@ public class MeActivity extends AppCompatActivity {
 
         setupOptions();
         findViewById(R.id.tvStaffIdentifier).setContentDescription(
-                "Staff account " + api.getWorkerId());
-        findViewById(R.id.tvStaffIdentifier).setTag("Staff ID: " + api.getWorkerId());
+                "Staff account " + api.getStaffNumber());
+        findViewById(R.id.tvStaffIdentifier).setTag("Staff ID: " + api.getStaffNumber());
         ((TextView) findViewById(R.id.tvStaffIdentifier)).setText(
-                "Staff ID: " + api.getWorkerId());
+                "Staff ID: " + (api.getStaffNumber().isEmpty() ? "—" : api.getStaffNumber()));
         ((TextView) findViewById(R.id.tvStaffBadge)).setText("1");
         ((TextView) findViewById(R.id.tvLevelProgress)).setText("Start your PPV activity");
         ((TextView) findViewById(R.id.tvLevelNextUpdate)).setText("Next level update: today");
@@ -127,6 +127,12 @@ public class MeActivity extends AppCompatActivity {
     }
 
     private void renderSummary(JSONObject result) {
+        api.saveStaffNumber(result.optString("staffNumber", ""));
+        ((TextView) findViewById(R.id.tvStaffIdentifier)).setText(
+                "Staff ID: " + api.getStaffNumber());
+        findViewById(R.id.tvStaffIdentifier).setContentDescription(
+                "Staff account " + api.getStaffNumber());
+        findViewById(R.id.tvStaffIdentifier).setTag("Staff ID: " + api.getStaffNumber());
         double paidCommission = result.optDouble("paidCommission", 0);
         int paidPpv = result.optInt("paidPpvPurchases", 0);
         ((TextView) findViewById(R.id.tvBalance)).setText(

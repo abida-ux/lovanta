@@ -31,7 +31,8 @@ public class DataActivity extends AppCompatActivity {
         ((TextView) findViewById(R.id.tvDataDate)).setText(dateFormat.format(now));
         ((TextView) findViewById(R.id.tvDataDay)).setText(dayFormat.format(now));
         api = ApiClient.get(this);
-        ((TextView) findViewById(R.id.tvWorkerId)).setText("Staff ID: " + api.getWorkerId());
+        ((TextView) findViewById(R.id.tvWorkerId)).setText(
+                "Staff ID: " + (api.getStaffNumber().isEmpty() ? "—" : api.getStaffNumber()));
         ((TextView) findViewById(R.id.tvNewMatchesCount)).setText("—");
         ((TextView) findViewById(R.id.tvOldMatchesCount)).setText("—");
         ((TextView) findViewById(R.id.tvPpvCount)).setText("—");
@@ -65,6 +66,9 @@ public class DataActivity extends AppCompatActivity {
     }
 
     private void renderSummary(JSONObject result) {
+        api.saveStaffNumber(result.optString("staffNumber", ""));
+        ((TextView) findViewById(R.id.tvWorkerId)).setText(
+                "Staff ID: " + (api.getStaffNumber().isEmpty() ? "—" : api.getStaffNumber()));
         ((TextView) findViewById(R.id.tvNewMatchesCount)).setText(result.optString("assignedModels", "0"));
         ((TextView) findViewById(R.id.tvOldMatchesCount)).setText(result.optString("activeConversations", "0"));
         ((TextView) findViewById(R.id.tvPpvCount)).setText(result.optString("paidPpvPurchases", "0"));

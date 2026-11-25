@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import type { WorkerRole } from "../models/Worker.ts";
 import { env } from "../config/env.ts";
 import { Worker } from "../models/Worker.ts";
+import { ensureStaffNumber } from "../utils/staffNumber.ts";
 
 export function getPermissions(role: WorkerRole): string[] {
   if (role === "ADMIN" || role === "admin") {
@@ -53,7 +54,7 @@ export const authenticateWorker: RequestHandler = async (req, res, next) => {
     suspendedAt: null,
     status: { $in: ["ACTIVE", null] },
   })
-    .select("_id email displayName role tokenVersion")
+    .select("_id email displayName role tokenVersion staffNumber")
     .lean();
 
   if (!worker) {
@@ -66,8 +67,12 @@ export const authenticateWorker: RequestHandler = async (req, res, next) => {
     return;
   }
 
+  const staffNumber = typeof worker.staffNumber === "number"
+    ? worker.staffNumber
+    : await ensureStaffNumber(worker._id.toString());
   req.authenticatedWorker = {
     id: worker._id.toString(),
+    staffNumber,
     email: worker.email,
     displayName: worker.displayName,
     role: worker.role,

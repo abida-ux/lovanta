@@ -69,6 +69,7 @@ public class TaskActivity extends AppCompatActivity {
     }
 
     private void renderSummary(JSONObject result) {
+        api.saveStaffNumber(result.optString("staffNumber", ""));
         double pending = result.optDouble("pendingCommission", 0);
         double paid = result.optDouble("paidCommission", 0);
         ((TextView) findViewById(R.id.tvPendingCommission)).setText(money(pending));

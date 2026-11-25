@@ -471,7 +471,7 @@ public class AdminActivity extends AppCompatActivity {
         LinearLayout table = new LinearLayout(this);
         table.setOrientation(LinearLayout.VERTICAL);
         int[] widths = {130, 190, 170, 100, 150, 150, 125};
-        String[] headers = {"Chatter ID", "Login identifier", "Assigned models",
+        String[] headers = {"Staff ID", "Login identifier", "Assigned models",
                 "Status", "Created", "Last login", "Actions"};
         table.addView(chatterTableRow(headers, widths, true));
 
@@ -481,7 +481,7 @@ public class AdminActivity extends AppCompatActivity {
             String id = chatter.optString("_id", "");
             JSONArray assigned = chatter.optJSONArray("assignedModels");
             String[] values = {
-                    id,
+                    chatter.optString("staffNumber", "—"),
                     chatter.optString("email", ""),
                     assignedModelNames(assigned),
                     chatter.optString("status", "ACTIVE"),
@@ -555,7 +555,7 @@ public class AdminActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         LinearLayout panel = formLayout();
         AlertDialog[] profileDialog = new AlertDialog[1];
-        panel.addView(profileLine("Chatter ID", id));
+        panel.addView(profileLine("Staff ID", chatter.optString("staffNumber", "—")));
         panel.addView(profileLine("Login identifier", email));
         panel.addView(profileLine("Account status", status));
         panel.addView(profileLine("Role", chatter.optString("role", "CHATTER")));
@@ -853,8 +853,15 @@ public class AdminActivity extends AppCompatActivity {
     }
 
     private void showCredentials(String title, String login, String password) {
+        showCredentials(title, login, password, "");
+    }
+
+    private void showCredentials(String title, String login, String password, String staffNumber) {
         LinearLayout panel = formLayout();
         addMessageTo(panel, "This is an app login ID only; it is not a Gmail inbox.");
+        if (!staffNumber.isEmpty()) {
+            addMessageTo(panel, "Staff ID: " + staffNumber);
+        }
         addCredentialField(panel, "LOGIN ID", login, "Copy Login ID", login);
         addCredentialField(panel, "PASSWORD", password, "Copy Password", password);
         Button copyAll = smallButton("Copy All Credentials");
@@ -1015,13 +1022,14 @@ public class AdminActivity extends AppCompatActivity {
         api.post("/api/v1/admin/chatters", new JSONObject(), callback(result -> {
             JSONObject chatter = result.optJSONObject("chatter");
             String email = chatter == null ? "" : chatter.optString("email", "");
+            String staffNumber = chatter == null ? "" : chatter.optString("staffNumber", "");
             String password = result.optString("temporaryPassword", "");
             if (email.isEmpty() || password.isEmpty()) {
                 toast("Account may have been created. Use Reset Password to generate login details.");
                 loadPage("Chatters");
                 return;
             }
-            showCredentials("Chatter account created", email, password);
+            showCredentials("Chatter account created", email, password, staffNumber);
             loadPage("Chatters");
         }));
     }

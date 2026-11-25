@@ -5,6 +5,7 @@ declare global {
     interface Request {
       authenticatedWorker?: {
         id: string;
+        staffNumber: number;
         email: string;
         displayName: string;
         role: WorkerRole;

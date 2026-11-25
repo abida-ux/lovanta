@@ -54,6 +54,7 @@ public class LoginActivity extends AppCompatActivity {
                 ApiClient.get(LoginActivity.this).saveSession(
                         result.optString("token"),
                         worker.optString("id"),
+                        worker.optString("staffNumber"),
                         role,
                         false
                 );

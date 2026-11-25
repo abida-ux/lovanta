@@ -9,6 +9,7 @@ import { authenticateWorker } from "../middleware/authenticateWorker.ts";
 import { getPermissions } from "../middleware/authenticateWorker.ts";
 import { Worker } from "../models/Worker.ts";
 import { parseInput } from "../utils/parseInput.ts";
+import { ensureStaffNumber } from "../utils/staffNumber.ts";
 
 const router = Router();
 const loginRateLimit = rateLimit({
@@ -50,6 +51,7 @@ router.post("/login", loginRateLimit, async (req, res) => {
   worker.failedLoginAttempts = 0;
   worker.lockedUntil = null;
   worker.lastLoginAt = new Date();
+  worker.staffNumber = await ensureStaffNumber(worker._id.toString());
   await worker.save();
 
   const role =
@@ -75,6 +77,7 @@ router.post("/login", loginRateLimit, async (req, res) => {
     mustChangePassword: worker.mustChangePassword,
     worker: {
       id: worker._id.toString(),
+      staffNumber: worker.staffNumber,
       email: worker.email,
       username: worker.username ?? null,
       displayName: worker.displayName,

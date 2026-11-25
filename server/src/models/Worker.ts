@@ -12,6 +12,7 @@ const workerSchema = new Schema(
       maxlength: 254,
     },
     displayName: { type: String, required: true, trim: true, maxlength: 100 },
+    staffNumber: { type: Number, min: 1 },
     passwordHash: { type: String, required: true, select: false },
     role: {
       type: String,
@@ -44,6 +45,7 @@ const workerSchema = new Schema(
 );
 
 workerSchema.index({ role: 1, status: 1, createdAt: -1 });
+workerSchema.index({ staffNumber: 1 }, { unique: true, sparse: true });
 
 export const Worker = model("Worker", workerSchema);
 export type WorkerRole = "ADMIN" | "SUPERVISOR" | "CHATTER" | "worker" | "admin";
