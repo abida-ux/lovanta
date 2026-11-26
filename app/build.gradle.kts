@@ -42,6 +42,7 @@ android {
 
 dependencies {
     implementation(libs.activity.ktx)
+    implementation(libs.image.cropper)
     implementation(libs.appcompat)
     implementation(libs.constraintlayout)
     implementation(libs.material)

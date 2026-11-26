@@ -1,6 +1,5 @@
 package com.example.lovanta;
 
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -22,6 +21,9 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import com.canhub.cropper.CropImageContract;
+import com.canhub.cropper.CropImageContractOptions;
+import com.canhub.cropper.CropImageOptions;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -56,6 +58,7 @@ public class ModelManagementActivity extends AppCompatActivity {
     private JSONArray assignments = new JSONArray();
     private JSONArray mediaAssets = new JSONArray();
     private ActivityResultLauncher<String> imagePicker;
+    private ActivityResultLauncher<CropImageContractOptions> imageCropper;
     private int pendingImagePurpose = REQUEST_PROFILE_IMAGE;
 
     @Override
@@ -65,6 +68,18 @@ public class ModelManagementActivity extends AppCompatActivity {
         imagePicker = registerForActivityResult(
                 new ActivityResultContracts.GetContent(),
                 this::onImageSelected);
+        imageCropper = registerForActivityResult(
+                new CropImageContract(),
+                result -> {
+                    if (result.isSuccessful()) {
+                        Uri croppedUri = result.getUriContent();
+                        if (croppedUri != null) uploadCroppedImage(croppedUri);
+                        else Toast.makeText(this, "The cropped image could not be opened.", Toast.LENGTH_LONG).show();
+                    } else if (result.getError() != null) {
+                        Toast.makeText(this, "Could not crop image: "
+                                + result.getError().getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
         ScreenInsets.applyToRoot(this, R.id.modelManagementRoot);
         api = ApiClient.get(this);
         modelId = getIntent().getStringExtra(EXTRA_MODEL_ID);
@@ -134,13 +149,18 @@ public class ModelManagementActivity extends AppCompatActivity {
         ImageView avatar = new ImageView(this);
         avatar.setImageResource(R.drawable.ic_person);
         avatar.setBackgroundResource(R.drawable.bg_model_avatar);
-        avatar.setPadding(dp(18), dp(18), dp(18), dp(18));
-        avatar.setColorFilter(getResources().getColor(R.color.lovanta_pink));
         LinearLayout.LayoutParams avatarParams = new LinearLayout.LayoutParams(dp(96), dp(96));
         avatarParams.gravity = Gravity.CENTER_HORIZONTAL;
         profile.addView(avatar, avatarParams);
         String avatarUrl = model.optString("avatarUrl", "");
-        if (!avatarUrl.isEmpty()) loadAvatar(avatar, avatarUrl);
+        if (!avatarUrl.isEmpty()) {
+            avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            avatar.setOnClickListener(v -> showImagePreview(avatarUrl));
+            loadAvatar(avatar, avatarUrl);
+        } else {
+            avatar.setPadding(dp(18), dp(18), dp(18), dp(18));
+            avatar.setColorFilter(getResources().getColor(R.color.lovanta_pink));
+        }
 
         TextView name = text(displayName, 20, R.color.lovanta_dark, true);
         name.setGravity(Gravity.CENTER);
@@ -217,13 +237,21 @@ public class ModelManagementActivity extends AppCompatActivity {
                 LinearLayout item = new LinearLayout(this);
                 item.setGravity(Gravity.CENTER_VERTICAL);
                 item.setOrientation(LinearLayout.HORIZONTAL);
-                TextView url = text(mediaUrl, 12, R.color.lovanta_dark, false);
-                url.setMaxLines(2);
-                url.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                item.addView(url, new LinearLayout.LayoutParams(0, -2, 1));
-                Button preview = actionButton("Open", R.color.lovanta_dark);
-                preview.setOnClickListener(v -> openPublicMedia(mediaUrl));
-                item.addView(preview, new LinearLayout.LayoutParams(dp(70), dp(40)));
+                ImageView thumbnail = new ImageView(this);
+                thumbnail.setImageResource(R.drawable.ic_person);
+                thumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                thumbnail.setBackgroundResource(R.drawable.bg_model_avatar);
+                LinearLayout.LayoutParams thumbnailParams =
+                        new LinearLayout.LayoutParams(dp(88), dp(88));
+                thumbnailParams.setMargins(0, dp(6), dp(12), dp(6));
+                item.addView(thumbnail, thumbnailParams);
+                loadAvatar(thumbnail, mediaUrl);
+                thumbnail.setOnClickListener(v -> showImagePreview(mediaUrl));
+                TextView label = text("Gallery image " + (index + 1), 14, R.color.lovanta_dark, true);
+                item.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
+                Button preview = actionButton("Preview", R.color.lovanta_dark);
+                preview.setOnClickListener(v -> showImagePreview(mediaUrl));
+                item.addView(preview, new LinearLayout.LayoutParams(dp(84), dp(40)));
                 if (canManage) {
                     Button remove = actionButton("Remove", R.color.lovanta_dark);
                     remove.setOnClickListener(v -> confirmRemoveGalleryUrl(index));
@@ -233,7 +261,7 @@ public class ModelManagementActivity extends AppCompatActivity {
             }
         }
         gallery.addView(text(
-                "New uploads are unavailable until durable media storage is configured.",
+                "Public model gallery images are stored in Cloudflare R2.",
                 12, R.color.lovanta_gray, false));
         content.addView(gallery);
     }
@@ -373,13 +401,25 @@ public class ModelManagementActivity extends AppCompatActivity {
     private void onImageSelected(Uri uri) {
         if (uri == null) return;
         String contentType = getContentResolver().getType(uri);
-        if (!("image/jpeg".equals(contentType)
-                || "image/png".equals(contentType)
-                || "image/webp".equals(contentType))) {
-            Toast.makeText(this, "Choose a JPEG, PNG, or WebP image.", Toast.LENGTH_LONG).show();
+        if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+            Toast.makeText(this, "Choose a valid image file.", Toast.LENGTH_LONG).show();
             return;
         }
 
+        CropImageOptions options = new CropImageOptions();
+        options.imageSourceIncludeCamera = false;
+        options.fixAspectRatio = pendingImagePurpose == REQUEST_PROFILE_IMAGE;
+        options.aspectRatioX = 1;
+        options.aspectRatioY = 1;
+        options.outputCompressFormat = Bitmap.CompressFormat.JPEG;
+        options.outputCompressQuality = 90;
+        options.activityTitle = pendingImagePurpose == REQUEST_PROFILE_IMAGE
+                ? "Crop profile image"
+                : "Crop gallery image";
+        imageCropper.launch(new CropImageContractOptions(uri, options));
+    }
+
+    private void uploadCroppedImage(Uri uri) {
         progress.setVisibility(View.VISIBLE);
         imageExecutor.execute(() -> {
             try {
@@ -405,7 +445,7 @@ public class ModelManagementActivity extends AppCompatActivity {
                 String purpose = pendingImagePurpose == REQUEST_PROFILE_IMAGE ? "avatar" : "gallery";
                 body.put("modelId", modelId);
                 body.put("purpose", purpose);
-                body.put("contentType", contentType);
+                body.put("contentType", "image/jpeg");
                 body.put("sizeBytes", bytes.length);
 
                 runOnUiThread(() -> api.post(
@@ -422,7 +462,7 @@ public class ModelManagementActivity extends AppCompatActivity {
                                             "The upload could not be prepared.", Toast.LENGTH_LONG).show();
                                     return;
                                 }
-                                uploadToR2(uploadUrl, assetId, contentType, bytes);
+                                uploadToR2(uploadUrl, assetId, "image/jpeg", bytes);
                             }
 
                             @Override
@@ -486,18 +526,20 @@ public class ModelManagementActivity extends AppCompatActivity {
         });
     }
 
-    private void openPublicMedia(String mediaUrl) {
-        try {
-            Uri uri = Uri.parse(mediaUrl);
-            String scheme = uri.getScheme();
-            if (uri.getHost() == null
-                    || !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))) {
-                throw new IllegalArgumentException("Invalid media URL");
-            }
-            startActivity(new Intent(Intent.ACTION_VIEW, uri));
-        } catch (ActivityNotFoundException | IllegalArgumentException error) {
-            Toast.makeText(this, "Unable to preview this media.", Toast.LENGTH_SHORT).show();
-        }
+    private void showImagePreview(String imageUrl) {
+        ImageView preview = new ImageView(this);
+        preview.setAdjustViewBounds(true);
+        preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        preview.setMinimumHeight(dp(240));
+        preview.setBackgroundColor(getResources().getColor(R.color.white));
+        preview.setImageResource(R.drawable.ic_person);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Image preview")
+                .setView(preview)
+                .setPositiveButton("Done", null)
+                .show();
+        loadAvatar(preview, imageUrl);
     }
 
     private void chooseChatter() {
@@ -580,7 +622,7 @@ public class ModelManagementActivity extends AppCompatActivity {
                 connection = (HttpURLConnection) new URL(imageUrl).openConnection();
                 connection.setConnectTimeout(8000);
                 connection.setReadTimeout(10000);
-                connection.setInstanceFollowRedirects(false);
+                connection.setInstanceFollowRedirects(true);
                 int statusCode = connection.getResponseCode();
                 String contentType = connection.getContentType();
                 if (statusCode < 200 || statusCode >= 300
