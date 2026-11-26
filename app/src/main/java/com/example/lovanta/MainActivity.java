@@ -99,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
         StoryAdapter storyAdapter = new StoryAdapter(storyList, story -> {
             Intent intent = new Intent(MainActivity.this, ModelProfileActivity.class);
             intent.putExtra(ModelProfileActivity.EXTRA_NAME, story.getName());
+            intent.putExtra(ModelProfileActivity.EXTRA_MODEL_ID, story.getModelId());
             intent.putExtra(ModelProfileActivity.EXTRA_AVATAR, story.getAvatarResId());
             intent.putExtra(ModelProfileActivity.EXTRA_AVATAR_URL, story.getAvatarUrl());
             intent.putExtra(ModelProfileActivity.EXTRA_BIO, story.getBio());
@@ -165,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
                     storyList.add(new StoryItem(
                             model.optString("displayName", "Model"),
                             R.drawable.ic_person,
+                            model.optString("id", ""),
                             model.optString("avatarUrl", ""),
                             model.optString("description", ""),
                             0,

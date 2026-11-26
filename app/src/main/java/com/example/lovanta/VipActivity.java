@@ -44,6 +44,7 @@ public class VipActivity extends AppCompatActivity {
         modelAdapter = new StoryAdapter(modelList, model -> {
             Intent intent = new Intent(this, ModelProfileActivity.class);
             intent.putExtra(ModelProfileActivity.EXTRA_NAME, model.getName());
+            intent.putExtra(ModelProfileActivity.EXTRA_MODEL_ID, model.getModelId());
             intent.putExtra(ModelProfileActivity.EXTRA_AVATAR, model.getAvatarResId());
             intent.putExtra(ModelProfileActivity.EXTRA_AVATAR_URL, model.getAvatarUrl());
             intent.putExtra(ModelProfileActivity.EXTRA_BIO, model.getBio());
@@ -76,7 +77,8 @@ public class VipActivity extends AppCompatActivity {
                     JSONObject model = models.optJSONObject(i);
                     if (model == null) continue;
                     modelList.add(new StoryItem(model.optString("displayName", "Model"),
-                            R.drawable.ic_person, model.optString("avatarUrl", ""),
+                            R.drawable.ic_person, model.optString("id", ""),
+                            model.optString("avatarUrl", ""),
                             model.optString("description", ""), 0, 0));
                 }
                 modelAdapter.notifyDataSetChanged();

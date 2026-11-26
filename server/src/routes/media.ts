@@ -9,6 +9,7 @@ import { MediaAsset } from "../models/MediaAsset.ts";
 import { ModelAccount } from "../models/ModelAccount.ts";
 import {
   deleteObject,
+  generatePresignedGetUrl,
   generatePresignedUploadUrl,
   getBucketName,
   getObjectMetadata,
@@ -24,8 +25,17 @@ const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i);
 const uploadIntentSchema = z.object({
   modelId: z.string().regex(/^[a-f\d]{24}$/i),
   purpose: z.enum(["avatar", "gallery"]),
+  visibility: z.enum(["public", "private"]).default("public"),
   contentType: z.enum(["image/jpeg", "image/png", "image/webp"]),
   sizeBytes: z.number().int().positive().max(10 * 1024 * 1024),
+}).superRefine((input, context) => {
+  if (input.purpose === "avatar" && input.visibility !== "public") {
+    context.addIssue({
+      code: "custom",
+      message: "Profile images must be public",
+      path: ["visibility"],
+    });
+  }
 });
 const completeSchema = z.object({
   assetId: z.string().regex(/^[a-f\d]{24}$/i),
@@ -59,7 +69,7 @@ router.post("/upload-intent", async (req, res) => {
   let presigned: { key: string; uploadUrl: string };
   try {
     presigned = await generatePresignedUploadUrl({
-      visibility: "public",
+      visibility: input.visibility,
       purpose: `model-${input.purpose}`,
       extension: extensionForContentType(input.contentType),
       contentType: input.contentType,
@@ -73,9 +83,9 @@ router.post("/upload-intent", async (req, res) => {
 
   const asset = await MediaAsset.create({
     modelAccountId: model._id,
-    visibility: "public",
+    visibility: input.visibility,
     purpose: input.purpose,
-    bucket: getBucketName("public"),
+    bucket: getBucketName(input.visibility),
     objectKey: presigned.key,
     contentType: input.contentType,
     sizeBytes: input.sizeBytes,
@@ -98,17 +108,17 @@ router.post("/:assetId/complete", async (req, res) => {
   });
   if (!asset) throw new HttpError(404, "Pending media not found");
 
-  const exists = await objectExists("public", asset.objectKey);
+  const exists = await objectExists(asset.visibility, asset.objectKey);
   if (!exists) throw new HttpError(409, "Uploaded object was not found in R2");
 
-  const metadata = await getObjectMetadata("public", asset.objectKey);
+  const metadata = await getObjectMetadata(asset.visibility, asset.objectKey);
   const actualType = metadata.ContentType ?? "";
   const actualSize = metadata.ContentLength ?? -1;
   if (actualType !== asset.contentType || actualSize !== asset.sizeBytes) {
     throw new HttpError(400, "Uploaded object metadata does not match the upload request");
   }
 
-  const publicUrl = publicUrlForKey(asset.objectKey);
+  const publicUrl = asset.visibility === "public" ? publicUrlForKey(asset.objectKey) : "";
   asset.publicUrl = publicUrl;
   asset.status = "ready";
   await asset.save();
@@ -121,12 +131,13 @@ router.post("/:assetId/complete", async (req, res) => {
       },
     });
   } else if (asset.purpose === "gallery") {
-    await ModelAccount.findByIdAndUpdate(asset.modelAccountId, {
-      $addToSet: {
-        galleryMediaIds: asset._id,
-        galleryUrls: publicUrl,
-      },
-    });
+    const update: Record<string, unknown> = {
+      $addToSet: { galleryMediaIds: asset._id },
+    };
+    if (asset.visibility === "public") {
+      update.$addToSet = { galleryMediaIds: asset._id, galleryUrls: publicUrl };
+    }
+    await ModelAccount.findByIdAndUpdate(asset.modelAccountId, update);
   }
 
   res.json({
@@ -134,6 +145,7 @@ router.post("/:assetId/complete", async (req, res) => {
       id: asset._id.toString(),
       modelAccountId: asset.modelAccountId.toString(),
       purpose: asset.purpose,
+      visibility: asset.visibility,
       publicUrl,
       contentType: asset.contentType,
       sizeBytes: asset.sizeBytes,
@@ -156,7 +168,7 @@ router.delete("/:assetId", async (req, res) => {
       ? {
           $pull: {
             galleryMediaIds: asset._id,
-            galleryUrls: asset.publicUrl,
+            ...(asset.publicUrl ? { galleryUrls: asset.publicUrl } : {}),
           },
         }
       : {}),
@@ -173,16 +185,34 @@ router.get("/models/:modelId", async (req, res) => {
     modelAccountId: modelId,
     status: "ready",
   }).sort({ createdAt: -1 }).lean();
-  res.json({
-    assets: assets.map((asset) => ({
+  const responseAssets = await Promise.all(assets.map(async (asset) => {
+    let previewUrl = asset.publicUrl;
+    if (asset.visibility === "private") {
+      try {
+        previewUrl = await generatePresignedGetUrl({
+          visibility: "private",
+          key: asset.objectKey,
+          expiresInSeconds: 300,
+        });
+      } catch (error) {
+        if (error instanceof R2StorageError) {
+          throw new HttpError(503, "Private media preview unavailable");
+        }
+        throw error;
+      }
+    }
+    return {
       id: asset._id.toString(),
       purpose: asset.purpose,
+      visibility: asset.visibility,
       publicUrl: asset.publicUrl,
+      previewUrl,
       contentType: asset.contentType,
       sizeBytes: asset.sizeBytes,
       createdAt: asset.createdAt,
-    })),
-  });
+    };
+  }));
+  res.json({ assets: responseAssets });
 });
 
 export default router;

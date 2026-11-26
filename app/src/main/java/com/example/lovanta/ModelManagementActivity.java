@@ -43,6 +43,11 @@ import java.util.concurrent.Executors;
 
 public class ModelManagementActivity extends AppCompatActivity {
     public static final String EXTRA_MODEL_ID = "model_id";
+    public static final String EXTRA_VISIBILITY = "media_visibility";
+    public static final String EXTRA_MODEL_NAME = "media_model_name";
+    public static final String EXTRA_LEGACY_PUBLIC_URLS = "legacy_public_urls";
+    public static final String EXTRA_USE_WORKSPACE_ENDPOINT = "use_workspace_media_endpoint";
+    public static final String EXTRA_CAN_MANAGE_MEDIA = "can_manage_model_media";
     private static final String TAG = "ModelManagement";
     private static final int MAX_IMAGE_BYTES = 10 * 1024 * 1024;
     private static final int REQUEST_PROFILE_IMAGE = 1;
@@ -60,6 +65,7 @@ public class ModelManagementActivity extends AppCompatActivity {
     private ActivityResultLauncher<String> imagePicker;
     private ActivityResultLauncher<CropImageContractOptions> imageCropper;
     private int pendingImagePurpose = REQUEST_PROFILE_IMAGE;
+    private String pendingImageVisibility = "public";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -124,6 +130,14 @@ public class ModelManagementActivity extends AppCompatActivity {
                     public void onError(String message) {
                         progress.setVisibility(View.GONE);
                         mediaAssets = new JSONArray();
+                        if (!api.hasSession()) {
+                            startActivity(new Intent(ModelManagementActivity.this, LoginActivity.class));
+                            finish();
+                            return;
+                        }
+                        Toast.makeText(ModelManagementActivity.this,
+                                "Model media could not be loaded: " + message,
+                                Toast.LENGTH_LONG).show();
                         renderModel();
                     }
                 });
@@ -202,10 +216,11 @@ public class ModelManagementActivity extends AppCompatActivity {
         }
         content.addView(profile);
 
-        addSectionTitle("PUBLIC GALLERY");
-        addPublicGallery(canManage());
-        addSectionTitle("PRIVATE GALLERY");
-        addText("Private uploads and protected delivery are unavailable until a media storage provider is configured.");
+        addSectionTitle("PUBLIC GALLERY · FREE");
+        addMediaGallery("public", canManage());
+        addSectionTitle("PRIVATE GALLERY · PPV");
+        addMediaGallery("private", canManage());
+        addText("Private media stays in the private R2 bucket. Subscriber access still requires a verified PPV payment flow.");
 
         addSectionTitle("MODEL CHATTERS");
         if (canManage() && model.optBoolean("active", true)) {
@@ -216,54 +231,97 @@ public class ModelManagementActivity extends AppCompatActivity {
         addAssignedChatters(canManage());
     }
 
-    private void addPublicGallery(boolean canManage) {
+    private void addMediaGallery(String visibility, boolean canManage) {
         LinearLayout gallery = card();
+        int imageCount = countGalleryImages(visibility);
+        boolean isPublic = "public".equals(visibility);
+        gallery.addView(text(
+                imageCount + (imageCount == 1 ? " image" : " images")
+                        + (isPublic ? " · Free public media" : " · Private staff preview"),
+                14, R.color.lovanta_gray, false));
+        LinearLayout actions = actionRow();
+        Button openGallery = actionButton("Open gallery", R.color.lovanta_dark);
+        openGallery.setOnClickListener(v -> openGallery(visibility));
+        actions.addView(openGallery, weightedButton());
         if (canManage) {
-            Button addImage = actionButton("Upload gallery image", R.color.lovanta_pink);
+            Button addImage = actionButton(
+                    isPublic ? "Upload free / public image" : "Upload private / PPV image",
+                    R.color.lovanta_pink);
             addImage.setOnClickListener(v -> {
                 pendingImagePurpose = REQUEST_GALLERY_IMAGE;
+                pendingImageVisibility = visibility;
                 imagePicker.launch("image/*");
             });
-            gallery.addView(addImage);
+            actions.addView(addImage, weightedButton());
         }
-        JSONArray galleryUrls = model.optJSONArray("galleryUrls");
-        if (galleryUrls == null || galleryUrls.length() == 0) {
-            gallery.addView(text("No public gallery items found.", 14, R.color.lovanta_gray, false));
-        } else {
-            for (int i = 0; i < galleryUrls.length(); i++) {
-                final int index = i;
-                String mediaUrl = galleryUrls.optString(i, "");
-                if (mediaUrl.isEmpty()) continue;
-                LinearLayout item = new LinearLayout(this);
-                item.setGravity(Gravity.CENTER_VERTICAL);
-                item.setOrientation(LinearLayout.HORIZONTAL);
-                ImageView thumbnail = new ImageView(this);
-                thumbnail.setImageResource(R.drawable.ic_person);
-                thumbnail.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                thumbnail.setBackgroundResource(R.drawable.bg_model_avatar);
-                LinearLayout.LayoutParams thumbnailParams =
-                        new LinearLayout.LayoutParams(dp(88), dp(88));
-                thumbnailParams.setMargins(0, dp(6), dp(12), dp(6));
-                item.addView(thumbnail, thumbnailParams);
-                loadAvatar(thumbnail, mediaUrl);
-                thumbnail.setOnClickListener(v -> showImagePreview(mediaUrl));
-                TextView label = text("Gallery image " + (index + 1), 14, R.color.lovanta_dark, true);
-                item.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
-                Button preview = actionButton("Preview", R.color.lovanta_dark);
-                preview.setOnClickListener(v -> showImagePreview(mediaUrl));
-                item.addView(preview, new LinearLayout.LayoutParams(dp(84), dp(40)));
-                if (canManage) {
-                    Button remove = actionButton("Remove", R.color.lovanta_dark);
-                    remove.setOnClickListener(v -> confirmRemoveGalleryUrl(index));
-                    item.addView(remove, new LinearLayout.LayoutParams(dp(84), dp(40)));
+        gallery.addView(actions);
+        if (!isPublic) {
+            gallery.addView(text(
+                    "Private images are not published to the public R2 domain.",
+                    12, R.color.lovanta_gray, false));
+        }
+        content.addView(gallery);
+    }
+
+    private int countGalleryImages(String visibility) {
+        Set<String> publicUrls = new HashSet<>();
+        int count = 0;
+        for (int i = 0; i < mediaAssets.length(); i++) {
+            JSONObject asset = mediaAssets.optJSONObject(i);
+            if (asset == null || !"gallery".equals(asset.optString("purpose"))
+                    || !visibility.equals(asset.optString("visibility"))) continue;
+            String publicUrl = asset.optString("publicUrl", "");
+            if ("public".equals(visibility) && !publicUrl.isEmpty()) publicUrls.add(publicUrl);
+            count++;
+        }
+
+        if ("public".equals(visibility)) {
+            JSONArray legacyUrls = model.optJSONArray("galleryUrls");
+            if (legacyUrls != null) {
+                for (int i = 0; i < legacyUrls.length(); i++) {
+                    String mediaUrl = legacyUrls.optString(i, "");
+                    if (!mediaUrl.isEmpty() && publicUrls.add(mediaUrl)) count++;
                 }
-                gallery.addView(item);
             }
         }
-        gallery.addView(text(
-                "Public model gallery images are stored in Cloudflare R2.",
-                12, R.color.lovanta_gray, false));
-        content.addView(gallery);
+        return count;
+    }
+
+    private void openGallery(String visibility) {
+        Intent intent = new Intent(this, ModelMediaGalleryActivity.class);
+        intent.putExtra(EXTRA_MODEL_ID, modelId);
+        intent.putExtra(EXTRA_MODEL_NAME, model.optString("displayName", "Model"));
+        intent.putExtra(EXTRA_VISIBILITY, visibility);
+        intent.putExtra(EXTRA_CAN_MANAGE_MEDIA, canManage());
+        if ("public".equals(visibility)) {
+            intent.putStringArrayListExtra(
+                    EXTRA_LEGACY_PUBLIC_URLS,
+                    getLegacyPublicGalleryUrls());
+        }
+        startActivity(intent);
+    }
+
+    private ArrayList<String> getLegacyPublicGalleryUrls() {
+        Set<String> assetUrls = new HashSet<>();
+        for (int i = 0; i < mediaAssets.length(); i++) {
+            JSONObject asset = mediaAssets.optJSONObject(i);
+            if (asset != null && "gallery".equals(asset.optString("purpose"))
+                    && "public".equals(asset.optString("visibility"))) {
+                assetUrls.add(asset.optString("publicUrl", ""));
+            }
+        }
+        ArrayList<String> legacyUrls = new ArrayList<>();
+        Set<String> includedUrls = new HashSet<>();
+        JSONArray urls = model.optJSONArray("galleryUrls");
+        if (urls != null) {
+            for (int i = 0; i < urls.length(); i++) {
+                String url = urls.optString(i, "");
+                if (!url.isEmpty() && !assetUrls.contains(url) && includedUrls.add(url)) {
+                    legacyUrls.add(url);
+                }
+            }
+        }
+        return legacyUrls;
     }
 
     private void addAssignedChatters(boolean canManage) {
@@ -355,49 +413,6 @@ public class ModelManagementActivity extends AppCompatActivity {
                 }).show();
     }
 
-    private void confirmRemoveGalleryUrl(int index) {
-        new AlertDialog.Builder(this)
-                .setTitle("Remove public media?")
-                .setMessage("This removes this URL from the model's public gallery.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Remove", (dialog, which) -> {
-                    JSONArray oldUrls = model.optJSONArray("galleryUrls");
-                    String removeUrl = oldUrls == null ? "" : oldUrls.optString(index, "");
-                    String assetId = findMediaAssetId(removeUrl, "gallery");
-                    if (!assetId.isEmpty()) {
-                        api.delete("/api/v1/admin/media/" + assetId,
-                                callback(result -> loadModel()));
-                        return;
-                    }
-                    JSONArray updatedUrls = new JSONArray();
-                    if (oldUrls != null) {
-                        for (int i = 0; i < oldUrls.length(); i++) {
-                            if (i != index) updatedUrls.put(oldUrls.opt(i));
-                        }
-                    }
-                    JSONObject body = new JSONObject();
-                    try {
-                        body.put("galleryUrls", updatedUrls);
-                    } catch (JSONException error) {
-                        Toast.makeText(this, "Could not update public gallery.", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    api.patch("/api/v1/admin/models/" + modelId, body, callback(result -> loadModel()));
-                }).show();
-    }
-
-    private String findMediaAssetId(String publicUrl, String purpose) {
-        for (int i = 0; i < mediaAssets.length(); i++) {
-            JSONObject asset = mediaAssets.optJSONObject(i);
-            if (asset == null) continue;
-            if (purpose.equals(asset.optString("purpose"))
-                    && publicUrl.equals(asset.optString("publicUrl"))) {
-                return asset.optString("id", "");
-            }
-        }
-        return "";
-    }
-
     private void onImageSelected(Uri uri) {
         if (uri == null) return;
         String contentType = getContentResolver().getType(uri);
@@ -411,6 +426,7 @@ public class ModelManagementActivity extends AppCompatActivity {
         options.fixAspectRatio = pendingImagePurpose == REQUEST_PROFILE_IMAGE;
         options.aspectRatioX = 1;
         options.aspectRatioY = 1;
+        options.initialCropWindowPaddingRatio = 0.2f;
         options.outputCompressFormat = Bitmap.CompressFormat.JPEG;
         options.outputCompressQuality = 90;
         options.activityTitle = pendingImagePurpose == REQUEST_PROFILE_IMAGE
@@ -446,6 +462,7 @@ public class ModelManagementActivity extends AppCompatActivity {
                 String purpose = pendingImagePurpose == REQUEST_PROFILE_IMAGE ? "avatar" : "gallery";
                 body.put("modelId", modelId);
                 body.put("purpose", purpose);
+                body.put("visibility", purpose.equals("avatar") ? "public" : pendingImageVisibility);
                 body.put("contentType", "image/jpeg");
                 body.put("sizeBytes", bytes.length);
 

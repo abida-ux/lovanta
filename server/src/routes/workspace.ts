@@ -6,12 +6,14 @@ import { authenticateWorker } from "../middleware/authenticateWorker.ts";
 import { ChatMessage } from "../models/ChatMessage.ts";
 import { Conversation } from "../models/Conversation.ts";
 import { ModelAccount } from "../models/ModelAccount.ts";
+import { MediaAsset } from "../models/MediaAsset.ts";
 import { WorkerAssignment } from "../models/WorkerAssignment.ts";
 import { PPVPurchase } from "../models/PPVPurchase.ts";
 import { Commission } from "../models/Commission.ts";
 import { Transaction } from "../models/Transaction.ts";
 import { parseInput } from "../utils/parseInput.ts";
 import { formatStaffNumber } from "../utils/staffNumber.ts";
+import { generatePresignedGetUrl, R2StorageError } from "../services/r2Storage.ts";
 
 const router = Router();
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i);
@@ -125,6 +127,54 @@ router.get("/models/:modelAccountId/conversations", async (req, res) => {
       lastMessageAt: conversation.lastMessageAt,
     })),
   });
+});
+
+router.get("/models/:modelAccountId/media", async (req, res) => {
+  const worker = req.authenticatedWorker;
+  if (!worker) throw new HttpError(401, "Authentication required");
+
+  const modelAccountId = parseInput(objectIdSchema, req.params.modelAccountId);
+  const isAssigned = await WorkerAssignment.exists({
+    workerId: worker.id,
+    modelAccountId,
+    active: true,
+  });
+  if (!isAssigned) throw new HttpError(404, "Model account not found");
+
+  const assets = await MediaAsset.find({
+    modelAccountId,
+    purpose: "gallery",
+    status: "ready",
+  }).sort({ createdAt: -1 }).lean();
+
+  const responseAssets = await Promise.all(assets.map(async (asset) => {
+    let previewUrl = asset.publicUrl;
+    if (asset.visibility === "private") {
+      try {
+        previewUrl = await generatePresignedGetUrl({
+          visibility: "private",
+          key: asset.objectKey,
+          expiresInSeconds: 300,
+        });
+      } catch (error) {
+        if (error instanceof R2StorageError) {
+          throw new HttpError(503, "Private media preview unavailable");
+        }
+        throw error;
+      }
+    }
+
+    return {
+      id: asset._id.toString(),
+      visibility: asset.visibility,
+      previewUrl,
+      contentType: asset.contentType,
+      sizeBytes: asset.sizeBytes,
+      createdAt: asset.createdAt,
+    };
+  }));
+
+  res.json({ assets: responseAssets });
 });
 
 router.get("/conversations/:conversationId/messages", async (req, res) => {

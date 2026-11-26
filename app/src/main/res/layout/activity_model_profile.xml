@@ -101,6 +101,33 @@
                     android:textSize="14sp" />
             </LinearLayout>
 
+            <LinearLayout
+                android:id="@+id/layoutModelMediaSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginTop="20dp"
+                    android:layout_marginBottom="8dp"
+                    android:text="MODEL MEDIA"
+                    android:textColor="@color/lovanta_gray"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08" />
+
+                <LinearLayout
+                    android:id="@+id/layoutModelMediaContent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="@drawable/bg_skeumorphic_card"
+                    android:padding="12dp" />
+            </LinearLayout>
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

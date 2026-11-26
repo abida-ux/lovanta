@@ -35,6 +35,9 @@
             android:name=".ModelManagementActivity"
             android:exported="false" />
         <activity
+            android:name=".ModelMediaGalleryActivity"
+            android:exported="false" />
+        <activity
             android:name="com.canhub.cropper.CropImageActivity"
             android:exported="false"
             tools:replace="android:exported"
