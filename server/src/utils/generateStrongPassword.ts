@@ -10,7 +10,7 @@ const ALL_CHARACTERS = CHARSETS.join("");
 
 export function generateStrongPassword(): string {
   const characters = CHARSETS.map((charset) => charset[randomInt(charset.length)]);
-  while (characters.length < 24) {
+  while (characters.length < 8) {
     characters.push(ALL_CHARACTERS[randomInt(ALL_CHARACTERS.length)]);
   }
   for (let index = characters.length - 1; index > 0; index--) {
