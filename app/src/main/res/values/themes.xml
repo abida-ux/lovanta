@@ -13,4 +13,11 @@
         <item name="android:colorAccent">@color/lovanta_pink</item>
         <item name="colorSurface">@color/lovanta_surface</item>
     </style>
+
+    <style name="ThemeOverlay.Lovanta.StatusDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="colorPrimary">@color/lovanta_pink</item>
+        <item name="colorSecondary">@color/lovanta_pink</item>
+        <item name="android:colorAccent">@color/lovanta_pink</item>
+        <item name="colorSurface">@color/lovanta_surface</item>
+    </style>
 </resources>
