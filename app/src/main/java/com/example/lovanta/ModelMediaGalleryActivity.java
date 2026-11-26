@@ -8,10 +8,12 @@ import android.graphics.Outline;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewOutlineProvider;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.ImageButton;
@@ -44,6 +46,7 @@ public class ModelMediaGalleryActivity extends AppCompatActivity {
     private ProgressBar progress;
     private JSONArray assets = new JSONArray();
     private final ArrayList<String> legacyPublicUrls = new ArrayList<>();
+    private final ArrayList<GalleryImage> galleryImages = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,8 +113,8 @@ public class ModelMediaGalleryActivity extends AppCompatActivity {
 
     private void renderGallery() {
         content.removeAllViews();
+        galleryImages.clear();
         Set<String> shownPublicUrls = new HashSet<>();
-        ArrayList<GalleryImage> images = new ArrayList<>();
         for (int i = 0; i < assets.length(); i++) {
             JSONObject asset = assets.optJSONObject(i);
             if (asset == null
@@ -120,25 +123,25 @@ public class ModelMediaGalleryActivity extends AppCompatActivity {
             String imageUrl = asset.optString("previewUrl", "");
             if (imageUrl.isEmpty()) continue;
             if ("public".equals(visibility)) shownPublicUrls.add(asset.optString("publicUrl", ""));
-            images.add(new GalleryImage(imageUrl, asset.optString("id", "")));
+            galleryImages.add(new GalleryImage(imageUrl, asset.optString("id", "")));
         }
 
         if ("public".equals(visibility)) {
             for (String legacyUrl : legacyPublicUrls) {
                 if (legacyUrl.isEmpty() || shownPublicUrls.contains(legacyUrl)) continue;
-                images.add(new GalleryImage(legacyUrl, ""));
+                galleryImages.add(new GalleryImage(legacyUrl, ""));
             }
         }
 
         TextView count = new TextView(this);
-        count.setText(images.size() + (images.size() == 1 ? " photo" : " photos")
+        count.setText(galleryImages.size() + (galleryImages.size() == 1 ? " photo" : " photos")
                 + "  ·  Tap a photo to view it");
         count.setTextSize(13);
         count.setTextColor(getResources().getColor(R.color.lovanta_gray));
         count.setPadding(dp(4), dp(2), dp(4), dp(10));
         content.addView(count);
 
-        if (images.isEmpty()) {
+        if (galleryImages.isEmpty()) {
             TextView empty = new TextView(this);
             empty.setText("Your " + visibility + " gallery is empty. Uploaded photos will appear here.");
             empty.setTextSize(15);
@@ -154,13 +157,13 @@ public class ModelMediaGalleryActivity extends AppCompatActivity {
         grid.setUseDefaultMargins(false);
         int screenWidth = getResources().getDisplayMetrics().widthPixels;
         int tileSize = (screenWidth - dp(20)) / 3;
-        for (int i = 0; i < images.size(); i++) {
-            addImageTile(grid, images.get(i), tileSize);
+        for (int i = 0; i < galleryImages.size(); i++) {
+            addImageTile(grid, galleryImages.get(i), i, tileSize);
         }
         content.addView(grid, new LinearLayout.LayoutParams(-1, -2));
     }
 
-    private void addImageTile(GridLayout grid, GalleryImage galleryImage, int tileSize) {
+    private void addImageTile(GridLayout grid, GalleryImage galleryImage, int index, int tileSize) {
         FrameLayout tile = new FrameLayout(this);
         tile.setBackground(createTileBackground());
         tile.setClipToOutline(true);
@@ -178,7 +181,7 @@ public class ModelMediaGalleryActivity extends AppCompatActivity {
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setContentDescription("Open gallery photo full screen");
         tile.addView(image, new FrameLayout.LayoutParams(-1, -1));
-        tile.setOnClickListener(v -> showFullScreenImage(galleryImage.url));
+        tile.setOnClickListener(v -> showFullScreenImage(index));
 
         if (canManageMedia && (!galleryImage.assetId.isEmpty() || "public".equals(visibility))) {
             ImageButton more = new ImageButton(this);
@@ -225,13 +228,51 @@ public class ModelMediaGalleryActivity extends AppCompatActivity {
         return background;
     }
 
-    private void showFullScreenImage(String imageUrl) {
+    private GradientDrawable createViewerPillBackground() {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(0x99000000);
+        background.setCornerRadius(dp(20));
+        return background;
+    }
+
+    private void showFullScreenImage(int initialIndex) {
         Dialog dialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-        ImageView image = new ImageView(this);
-        image.setBackgroundColor(Color.BLACK);
-        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        image.setContentDescription("Full-screen image. Press Back to close.");
-        dialog.setContentView(image);
+        FrameLayout viewer = new FrameLayout(this);
+        viewer.setBackgroundColor(Color.BLACK);
+        ImageView firstImage = new ImageView(this);
+        ImageView secondImage = new ImageView(this);
+        firstImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        secondImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        viewer.addView(firstImage, new FrameLayout.LayoutParams(-1, -1));
+        viewer.addView(secondImage, new FrameLayout.LayoutParams(-1, -1));
+        secondImage.setVisibility(View.GONE);
+
+        View touchLayer = new View(this);
+        touchLayer.setBackgroundColor(Color.TRANSPARENT);
+        touchLayer.setClickable(true);
+        viewer.addView(touchLayer, new FrameLayout.LayoutParams(-1, -1));
+
+        TextView position = new TextView(this);
+        position.setTextColor(Color.WHITE);
+        position.setTextSize(14);
+        position.setGravity(Gravity.CENTER);
+        position.setBackground(createViewerPillBackground());
+        FrameLayout.LayoutParams positionParams =
+                new FrameLayout.LayoutParams(dp(64), dp(36), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        positionParams.topMargin = dp(20);
+        viewer.addView(position, positionParams);
+
+        TextView swipeHint = new TextView(this);
+        swipeHint.setText("Swipe to browse  ·  Tap to close");
+        swipeHint.setTextColor(Color.WHITE);
+        swipeHint.setTextSize(13);
+        swipeHint.setGravity(Gravity.CENTER);
+        swipeHint.setBackground(createViewerPillBackground());
+        FrameLayout.LayoutParams hintParams =
+                new FrameLayout.LayoutParams(-2, dp(40), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        hintParams.bottomMargin = dp(28);
+        viewer.addView(swipeHint, hintParams);
+        dialog.setContentView(viewer);
         dialog.setCancelable(true);
         dialog.show();
         Window window = dialog.getWindow();
@@ -240,9 +281,101 @@ public class ModelMediaGalleryActivity extends AppCompatActivity {
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT);
         }
-        ModelImageLoader.load(image, imageUrl, R.drawable.ic_person);
+        int[] currentIndex = {Math.max(0, Math.min(initialIndex, galleryImages.size() - 1))};
+        ImageView[] activeImage = {firstImage};
+        ImageView[] incomingImage = {secondImage};
+        boolean[] transitioning = {false};
+        showViewerImage(activeImage[0], position, currentIndex[0]);
+        float[] touchStart = new float[2];
+        touchLayer.setOnTouchListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                touchStart[0] = event.getX();
+                touchStart[1] = event.getY();
+                return true;
+            }
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                float deltaX = event.getX() - touchStart[0];
+                float deltaY = event.getY() - touchStart[1];
+                if (Math.abs(deltaX) > dp(48) && Math.abs(deltaX) > Math.abs(deltaY)) {
+                    if (transitioning[0] || galleryImages.size() < 2) return true;
+                    int next = currentIndex[0] + (deltaX < 0 ? 1 : -1);
+                    if (next < 0) next = galleryImages.size() - 1;
+                    if (next >= galleryImages.size()) next = 0;
+                    int slideDirection = deltaX < 0 ? 1 : -1;
+                    animateViewerImage(
+                            viewer,
+                            activeImage,
+                            incomingImage,
+                            transitioning,
+                            position,
+                            currentIndex,
+                            next,
+                            slideDirection);
+                } else if (Math.abs(deltaX) < dp(16) && Math.abs(deltaY) < dp(16)) {
+                    dialog.dismiss();
+                }
+                return true;
+            }
+            return event.getAction() == MotionEvent.ACTION_MOVE
+                    || event.getAction() == MotionEvent.ACTION_CANCEL;
+        });
+    }
+
+    private void animateViewerImage(
+            FrameLayout viewer,
+            ImageView[] activeImage,
+            ImageView[] incomingImage,
+            boolean[] transitioning,
+            TextView position,
+            int[] currentIndex,
+            int nextIndex,
+            int direction) {
+        transitioning[0] = true;
+        ImageView outgoing = activeImage[0];
+        ImageView incoming = incomingImage[0];
+        incoming.setVisibility(View.VISIBLE);
+        incoming.setTranslationX(direction * Math.max(viewer.getWidth(), getResources()
+                .getDisplayMetrics().widthPixels));
+        incoming.setAlpha(0f);
+
+        GalleryImage selected = galleryImages.get(nextIndex);
+        ModelImageLoader.load(incoming, selected.url, R.drawable.ic_person, loaded -> {
+            incoming.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            int slideDistance = Math.max(viewer.getWidth(), getResources()
+                    .getDisplayMetrics().widthPixels);
+            long duration = 240;
+            incoming.animate()
+                    .translationX(0)
+                    .alpha(1f)
+                    .setDuration(duration)
+                    .setInterpolator(new AccelerateDecelerateInterpolator())
+                    .withEndAction(() -> {
+                        outgoing.setVisibility(View.GONE);
+                        outgoing.setTranslationX(0);
+                        outgoing.setAlpha(1f);
+                        activeImage[0] = incoming;
+                        incomingImage[0] = outgoing;
+                        currentIndex[0] = nextIndex;
+                        position.setText((nextIndex + 1) + " / " + galleryImages.size());
+                        transitioning[0] = false;
+                    })
+                    .start();
+            outgoing.animate()
+                    .translationX(-direction * slideDistance)
+                    .alpha(0f)
+                    .setDuration(duration)
+                    .setInterpolator(new AccelerateDecelerateInterpolator())
+                    .start();
+        });
+    }
+
+    private void showViewerImage(ImageView image, TextView position, int index) {
+        GalleryImage selected = galleryImages.get(index);
+        image.setContentDescription("Photo " + (index + 1) + " of " + galleryImages.size()
+                + ". Swipe left or right to browse.");
+        position.setText((index + 1) + " / " + galleryImages.size());
+        ModelImageLoader.load(image, selected.url, R.drawable.ic_person);
         image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        image.setOnClickListener(v -> dialog.dismiss());
     }
 
     private void confirmRemoveAsset(String assetId) {

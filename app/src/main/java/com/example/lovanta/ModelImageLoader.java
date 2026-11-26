@@ -23,6 +23,14 @@ public final class ModelImageLoader {
     private ModelImageLoader() {}
 
     public static void load(ImageView image, String imageUrl, int fallbackResource) {
+        load(image, imageUrl, fallbackResource, null);
+    }
+
+    public static void load(
+            ImageView image,
+            String imageUrl,
+            int fallbackResource,
+            LoadCallback callback) {
         image.setImageResource(fallbackResource);
         image.setTag(imageUrl);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -30,6 +38,7 @@ public final class ModelImageLoader {
 
         if (imageUrl == null || imageUrl.trim().isEmpty()) {
             image.setColorFilter(image.getResources().getColor(R.color.lovanta_pink));
+            if (callback != null) callback.onComplete(false);
             return;
         }
 
@@ -38,6 +47,7 @@ public final class ModelImageLoader {
         if (uri.getHost() == null
                 || !("https".equalsIgnoreCase(scheme) || "http".equalsIgnoreCase(scheme))) {
             image.setColorFilter(image.getResources().getColor(R.color.lovanta_pink));
+            if (callback != null) callback.onComplete(false);
             return;
         }
 
@@ -91,13 +101,23 @@ public final class ModelImageLoader {
                         image.setImageTintList(null);
                         image.clearColorFilter();
                         image.setImageBitmap(bitmap);
+                        if (callback != null) callback.onComplete(true);
                     }
                 });
             } catch (IOException | RuntimeException error) {
                 android.util.Log.w("ModelImageLoader", "Unable to load model avatar", error);
+                MAIN.post(() -> {
+                    if (imageUrl.equals(image.getTag()) && callback != null) {
+                        callback.onComplete(false);
+                    }
+                });
             } finally {
                 if (connection != null) connection.disconnect();
             }
         });
+    }
+
+    public interface LoadCallback {
+        void onComplete(boolean loaded);
     }
 }

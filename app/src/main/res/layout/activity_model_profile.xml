@@ -3,27 +3,27 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/lovanta_bg">
+    android:background="@color/lovanta_bg"
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:orientation="horizontal"
+        android:layout_height="60dp"
         android:background="@color/lovanta_surface"
-        android:elevation="4dp"
+        android:elevation="2dp"
         android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingStart="8dp"
-        android:paddingEnd="8dp">
+        android:paddingEnd="16dp">
 
         <ImageButton
             android:id="@+id/btnBack"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:src="@drawable/ic_arrow_back"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
-            android:padding="12dp" />
+            android:padding="12dp"
+            android:src="@drawable/ic_arrow_back" />
 
         <TextView
             android:layout_width="0dp"
@@ -32,63 +32,70 @@
             android:text="Model profile"
             android:textColor="@color/lovanta_dark"
             android:textSize="18sp"
-            android:textStyle="bold"
-            android:gravity="center" />
-
-        <View
-            android:layout_width="48dp"
-            android:layout_height="48dp" />
+            android:textStyle="bold" />
     </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:clipToPadding="false"
         android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingTop="18dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="28dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="@drawable/bg_model_profile_hero"
+                android:gravity="center_horizontal"
                 android:orientation="vertical"
-                android:gravity="center"
-                android:background="@drawable/bg_skeumorphic_card"
-                android:padding="24dp">
+                android:paddingStart="20dp"
+                android:paddingTop="24dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="24dp">
 
                 <ImageView
                     android:id="@+id/ivModelAvatar"
-                    android:layout_width="104dp"
-                    android:layout_height="104dp"
-                    android:src="@drawable/ic_person"
+                    android:layout_width="112dp"
+                    android:layout_height="112dp"
                     android:background="@drawable/bg_model_avatar"
-                    android:padding="22dp"
-                    android:tint="@color/lovanta_pink"
-                    android:contentDescription="Model profile photo" />
+                    android:contentDescription="Model profile photo"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_person" />
 
                 <TextView
                     android:id="@+id/tvModelName"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center"
                     android:text="Model name"
                     android:textColor="@color/lovanta_dark"
-                    android:textSize="22sp"
+                    android:textSize="24sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
+                    android:layout_marginTop="8dp"
+                    android:background="@drawable/bg_model_profile_badge"
+                    android:paddingStart="12dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="6dp"
                     android:text="ASSIGNED MODEL"
                     android:textColor="@color/lovanta_pink"
-                    android:textSize="11sp"
+                    android:textSize="10sp"
                     android:textStyle="bold"
-                    android:letterSpacing="0.04" />
+                    android:letterSpacing="0.08" />
 
                 <TextView
                     android:id="@+id/tvModelBio"
@@ -96,10 +103,32 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
                     android:gravity="center"
+                    android:lineSpacingExtra="3dp"
                     android:text="Model bio"
                     android:textColor="@color/lovanta_gray"
                     android:textSize="14sp" />
             </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="28dp"
+                android:text="MEDIA LIBRARY"
+                android:textColor="@color/lovanta_dark"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="12dp"
+                android:text="Quick access to this model’s public and private photos."
+                android:textColor="@color/lovanta_gray"
+                android:textSize="13sp" />
 
             <LinearLayout
                 android:id="@+id/layoutModelMediaSection"
@@ -107,121 +136,12 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginBottom="8dp"
-                    android:text="MODEL MEDIA"
-                    android:textColor="@color/lovanta_gray"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.08" />
-
                 <LinearLayout
                     android:id="@+id/layoutModelMediaContent"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:background="@drawable/bg_skeumorphic_card"
-                    android:padding="12dp" />
+                    android:orientation="horizontal" />
             </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_marginTop="20dp"
-                android:layout_marginBottom="8dp"
-                android:text="MODEL OVERVIEW"
-                android:textColor="@color/lovanta_gray"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.08" />
-
-            <LinearLayout
-                android:id="@+id/layoutModelStats"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:background="@drawable/bg_skeumorphic_card"
-                android:padding="16dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center">
-
-                    <TextView
-                        android:id="@+id/tvModelSubscribers"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="—"
-                        android:textColor="@color/lovanta_dark"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="VIP subscribers"
-                        android:textColor="@color/lovanta_gray"
-                        android:textSize="11sp" />
-                </LinearLayout>
-
-                <View
-                    android:layout_width="1dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/lovanta_border" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center">
-
-                    <TextView
-                        android:id="@+id/tvModelUnlocks"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="—"
-                        android:textColor="@color/lovanta_dark"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="PPV unlocks"
-                        android:textColor="@color/lovanta_gray"
-                        android:textSize="11sp" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_marginTop="20dp"
-                android:layout_marginBottom="8dp"
-                android:text="CHATTER WORKSPACE"
-                android:textColor="@color/lovanta_gray"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.08" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_skeumorphic_card"
-                android:padding="16dp"
-                android:text="This profile is part of the models you manage. VIP subscribers and their PPV activity are tracked in the VIP section."
-                android:textColor="@color/lovanta_dark"
-                android:textSize="14sp" />
         </LinearLayout>
     </ScrollView>
 </LinearLayout>
