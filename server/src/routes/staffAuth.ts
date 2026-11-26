@@ -32,7 +32,11 @@ router.post("/login", loginRateLimit, async (req, res) => {
     ?? await Worker.findOne({ username: identifier }).select("+passwordHash");
   const accountStatus = worker?.status
     ?? (worker?.active && !worker.suspendedAt ? "ACTIVE" : "DISABLED");
-  if (!worker || !worker.active || worker.suspendedAt || accountStatus !== "ACTIVE") {
+  if (!worker) {
+    throw new HttpError(401, "Email or password is incorrect");
+  }
+  const isChatter = worker.role === "CHATTER" || worker.role === "worker";
+  if (!isChatter && (!worker.active || worker.suspendedAt || accountStatus !== "ACTIVE")) {
     throw new HttpError(401, "Email or password is incorrect");
   }
   if (worker.lockedUntil && worker.lockedUntil > new Date()) {
@@ -46,6 +50,28 @@ router.post("/login", loginRateLimit, async (req, res) => {
     }
     await worker.save();
     throw new HttpError(401, "Email or password is incorrect");
+  }
+
+  if (isChatter && accountStatus === "BANNED") {
+    throw new HttpError(
+      423,
+      "Your chatter account has been banned. Your case is being reviewed. Please contact an administrator.",
+    );
+  }
+  if (isChatter && accountStatus === "DISABLED") {
+    throw new HttpError(
+      423,
+      "Your chatter account is disabled. Your case is being reviewed. Please contact an administrator.",
+    );
+  }
+  if (isChatter && accountStatus === "ARCHIVED") {
+    throw new HttpError(423, "Your chatter account is archived. Please contact an administrator.");
+  }
+  if (isChatter && (!worker.active || worker.suspendedAt)) {
+    throw new HttpError(
+      423,
+      "Your chatter account is disabled. Your case is being reviewed. Please contact an administrator.",
+    );
   }
 
   worker.failedLoginAttempts = 0;

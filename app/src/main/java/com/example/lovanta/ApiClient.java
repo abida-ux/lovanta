@@ -353,7 +353,14 @@ public final class ApiClient {
             }
             if (response.statusCode == 403) return "You don't have permission to access this page.";
             if (response.statusCode == 404) return "The requested information could not be found.";
-            if (response.statusCode == 423) return "This account is temporarily locked. Try again later.";
+            if (response.statusCode == 423) {
+                boolean loginRequest = "POST".equals(method)
+                        && path != null && path.startsWith("/api/staff/auth/login");
+                if (loginRequest && isAccountStatusMessage(response.serverMessage)) {
+                    return response.serverMessage;
+                }
+                return "This account is temporarily locked. Try again later.";
+            }
             if (response.statusCode == 429) return "Too many attempts. Please wait and try again.";
             if (response.statusCode >= 500) return "The service is temporarily unavailable. Please try again.";
             if (response.statusCode == 400 || response.statusCode == 409) {
@@ -374,5 +381,13 @@ public final class ApiClient {
             return "Unable to reach the service. Check your connection and try again.";
         }
         return "Unable to complete the request. Please try again.";
+    }
+
+    private boolean isAccountStatusMessage(String message) {
+        return "Your chatter account has been banned. Your case is being reviewed. Please contact an administrator."
+                .equals(message)
+                || "Your chatter account is disabled. Your case is being reviewed. Please contact an administrator."
+                .equals(message)
+                || "Your chatter account is archived. Please contact an administrator.".equals(message);
     }
 }
