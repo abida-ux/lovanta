@@ -6,6 +6,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.json.JSONObject;
@@ -82,6 +83,16 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void showError(String message) {
+        if (message.startsWith("Your chatter account is disabled.")
+                || message.startsWith("Your chatter account has been banned.")) {
+            boolean banned = message.startsWith("Your chatter account has been banned.");
+            new AlertDialog.Builder(this)
+                    .setTitle(banned ? "Account banned" : "Account disabled")
+                    .setMessage(message + "\n\nContact your Lovanta administrator to ask about the restriction and the next steps.")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 }
