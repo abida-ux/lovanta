@@ -416,6 +416,7 @@ public class ModelManagementActivity extends AppCompatActivity {
         options.activityTitle = pendingImagePurpose == REQUEST_PROFILE_IMAGE
                 ? "Crop profile image"
                 : "Crop gallery image";
+        options.cropMenuCropButtonTitle = "Done";
         imageCropper.launch(new CropImageContractOptions(uri, options));
     }
 

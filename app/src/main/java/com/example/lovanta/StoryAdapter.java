@@ -36,7 +36,7 @@ public class StoryAdapter extends RecyclerView.Adapter<StoryAdapter.StoryViewHol
     public void onBindViewHolder(@NonNull StoryViewHolder holder, int position) {
         StoryItem story = stories.get(position);
         holder.tvName.setText(story.getName());
-        holder.ivAvatar.setImageResource(story.getAvatarResId());
+        ModelImageLoader.load(holder.ivAvatar, story.getAvatarUrl(), story.getAvatarResId());
         holder.itemView.setOnClickListener(v -> listener.onStoryClick(story));
     }
 

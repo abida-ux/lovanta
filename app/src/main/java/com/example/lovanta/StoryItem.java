@@ -3,13 +3,25 @@ package com.example.lovanta;
 public class StoryItem {
     private final String name;
     private final int avatarResId;
+    private final String avatarUrl;
     private final String bio;
     private final int subscriberCount;
     private final int ppvUnlockCount;
 
     public StoryItem(String name, int avatarResId, String bio, int subscriberCount, int ppvUnlockCount) {
+        this(name, avatarResId, "", bio, subscriberCount, ppvUnlockCount);
+    }
+
+    public StoryItem(
+            String name,
+            int avatarResId,
+            String avatarUrl,
+            String bio,
+            int subscriberCount,
+            int ppvUnlockCount) {
         this.name = name;
         this.avatarResId = avatarResId;
+        this.avatarUrl = avatarUrl == null ? "" : avatarUrl;
         this.bio = bio;
         this.subscriberCount = subscriberCount;
         this.ppvUnlockCount = ppvUnlockCount;
@@ -21,6 +33,10 @@ public class StoryItem {
 
     public int getAvatarResId() {
         return avatarResId;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
     }
 
     public String getBio() {

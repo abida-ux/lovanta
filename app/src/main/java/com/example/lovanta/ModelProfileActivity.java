@@ -14,6 +14,7 @@ public class ModelProfileActivity extends AppCompatActivity {
 
     public static final String EXTRA_NAME = "model_name";
     public static final String EXTRA_AVATAR = "model_avatar";
+    public static final String EXTRA_AVATAR_URL = "model_avatar_url";
     public static final String EXTRA_BIO = "model_bio";
     public static final String EXTRA_SUBSCRIBERS = "model_subscribers";
     public static final String EXTRA_PPV_UNLOCKS = "model_ppv_unlocks";
@@ -35,7 +36,10 @@ public class ModelProfileActivity extends AppCompatActivity {
         tvName.setText(getIntent().getStringExtra(EXTRA_NAME));
         String bio = getIntent().getStringExtra(EXTRA_BIO);
         tvBio.setText(bio == null || bio.trim().isEmpty() ? "No description provided." : bio);
-        ivAvatar.setImageResource(getIntent().getIntExtra(EXTRA_AVATAR, R.drawable.ic_person));
+        ModelImageLoader.load(
+                ivAvatar,
+                getIntent().getStringExtra(EXTRA_AVATAR_URL),
+                getIntent().getIntExtra(EXTRA_AVATAR, R.drawable.ic_person));
         tvName.setContentDescription("Model " + tvName.getText());
         ivAvatar.setContentDescription("Profile for " + tvName.getText());
         findViewById(R.id.layoutModelStats).setVisibility(View.GONE);

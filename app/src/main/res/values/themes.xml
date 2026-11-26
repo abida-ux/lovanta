@@ -7,6 +7,12 @@
 
     <style name="Theme.Lovanta" parent="Base.Theme.Lovanta" />
 
+    <style name="Theme.Lovanta.Cropper" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/lovanta_pink</item>
+        <item name="colorPrimaryDark">@color/lovanta_pink</item>
+        <item name="colorAccent">@color/lovanta_pink</item>
+    </style>
+
     <style name="ThemeOverlay.Lovanta.AdminDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
         <item name="colorPrimary">@color/lovanta_pink</item>
         <item name="colorSecondary">@color/lovanta_pink</item>
