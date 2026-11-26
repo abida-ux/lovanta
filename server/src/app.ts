@@ -7,6 +7,7 @@ import authRouter from "./routes/auth.ts";
 import workspaceRouter from "./routes/workspace.ts";
 import staffAuthRouter from "./routes/staffAuth.ts";
 import adminRouter from "./routes/admin.ts";
+import mediaRouter from "./routes/media.ts";
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/v1/auth", authRouter);
 app.use("/api/staff/auth", staffAuthRouter);
 app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/admin/media", mediaRouter);
 app.use("/api/v1", workspaceRouter);
 app.use(handleErrors);
 

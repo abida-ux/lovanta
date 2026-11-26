@@ -20,6 +20,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -40,7 +42,9 @@ import java.util.concurrent.Executors;
 public class ModelManagementActivity extends AppCompatActivity {
     public static final String EXTRA_MODEL_ID = "model_id";
     private static final String TAG = "ModelManagement";
-    private static final int MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+    private static final int MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+    private static final int REQUEST_PROFILE_IMAGE = 1;
+    private static final int REQUEST_GALLERY_IMAGE = 2;
 
     private final ExecutorService imageExecutor = Executors.newSingleThreadExecutor();
     private ApiClient api;
@@ -50,11 +54,17 @@ public class ModelManagementActivity extends AppCompatActivity {
     private TextView title;
     private JSONObject model;
     private JSONArray assignments = new JSONArray();
+    private JSONArray mediaAssets = new JSONArray();
+    private ActivityResultLauncher<String> imagePicker;
+    private int pendingImagePurpose = REQUEST_PROFILE_IMAGE;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_model_management);
+        imagePicker = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                this::onImageSelected);
         ScreenInsets.applyToRoot(this, R.id.modelManagementRoot);
         api = ApiClient.get(this);
         modelId = getIntent().getStringExtra(EXTRA_MODEL_ID);
@@ -76,17 +86,32 @@ public class ModelManagementActivity extends AppCompatActivity {
         api.get("/api/v1/admin/models/" + modelId, new ApiClient.Callback() {
             @Override
             public void onSuccess(JSONObject result) {
-                progress.setVisibility(View.GONE);
                 model = result.optJSONObject("model");
                 assignments = result.optJSONArray("assignments");
                 if (assignments == null) assignments = new JSONArray();
                 if (model == null) {
+                    progress.setVisibility(View.GONE);
                     Toast.makeText(ModelManagementActivity.this,
                             "Unable to load model. Please try again.", Toast.LENGTH_LONG).show();
                     finish();
                     return;
                 }
-                renderModel();
+                api.get("/api/v1/admin/media/models/" + modelId, new ApiClient.Callback() {
+                    @Override
+                    public void onSuccess(JSONObject mediaResult) {
+                        progress.setVisibility(View.GONE);
+                        mediaAssets = mediaResult.optJSONArray("assets");
+                        if (mediaAssets == null) mediaAssets = new JSONArray();
+                        renderModel();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        progress.setVisibility(View.GONE);
+                        mediaAssets = new JSONArray();
+                        renderModel();
+                    }
+                });
             }
 
             @Override
@@ -141,11 +166,17 @@ public class ModelManagementActivity extends AppCompatActivity {
             LinearLayout profileActions = actionRow();
             Button edit = actionButton("Edit profile", R.color.lovanta_pink);
             edit.setOnClickListener(v -> editProfile());
+            Button uploadImage = actionButton("Upload profile image", R.color.lovanta_pink);
+            uploadImage.setOnClickListener(v -> {
+                pendingImagePurpose = REQUEST_PROFILE_IMAGE;
+                imagePicker.launch("image/*");
+            });
             Button toggleStatus = actionButton(
                     model.optBoolean("active", true) ? "Deactivate" : "Activate",
                     R.color.lovanta_dark);
             toggleStatus.setOnClickListener(v -> confirmStatusChange());
             profileActions.addView(edit, weightedButton());
+            profileActions.addView(uploadImage, weightedButton());
             profileActions.addView(toggleStatus, weightedButton());
             profile.addView(profileActions);
         }
@@ -167,6 +198,14 @@ public class ModelManagementActivity extends AppCompatActivity {
 
     private void addPublicGallery(boolean canManage) {
         LinearLayout gallery = card();
+        if (canManage) {
+            Button addImage = actionButton("Upload gallery image", R.color.lovanta_pink);
+            addImage.setOnClickListener(v -> {
+                pendingImagePurpose = REQUEST_GALLERY_IMAGE;
+                imagePicker.launch("image/*");
+            });
+            gallery.addView(addImage);
+        }
         JSONArray galleryUrls = model.optJSONArray("galleryUrls");
         if (galleryUrls == null || galleryUrls.length() == 0) {
             gallery.addView(text("No public gallery items found.", 14, R.color.lovanta_gray, false));
@@ -295,6 +334,13 @@ public class ModelManagementActivity extends AppCompatActivity {
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Remove", (dialog, which) -> {
                     JSONArray oldUrls = model.optJSONArray("galleryUrls");
+                    String removeUrl = oldUrls == null ? "" : oldUrls.optString(index, "");
+                    String assetId = findMediaAssetId(removeUrl, "gallery");
+                    if (!assetId.isEmpty()) {
+                        api.delete("/api/v1/admin/media/" + assetId,
+                                callback(result -> loadModel()));
+                        return;
+                    }
                     JSONArray updatedUrls = new JSONArray();
                     if (oldUrls != null) {
                         for (int i = 0; i < oldUrls.length(); i++) {
@@ -310,6 +356,134 @@ public class ModelManagementActivity extends AppCompatActivity {
                     }
                     api.patch("/api/v1/admin/models/" + modelId, body, callback(result -> loadModel()));
                 }).show();
+    }
+
+    private String findMediaAssetId(String publicUrl, String purpose) {
+        for (int i = 0; i < mediaAssets.length(); i++) {
+            JSONObject asset = mediaAssets.optJSONObject(i);
+            if (asset == null) continue;
+            if (purpose.equals(asset.optString("purpose"))
+                    && publicUrl.equals(asset.optString("publicUrl"))) {
+                return asset.optString("id", "");
+            }
+        }
+        return "";
+    }
+
+    private void onImageSelected(Uri uri) {
+        if (uri == null) return;
+        String contentType = getContentResolver().getType(uri);
+        if (!("image/jpeg".equals(contentType)
+                || "image/png".equals(contentType)
+                || "image/webp".equals(contentType))) {
+            Toast.makeText(this, "Choose a JPEG, PNG, or WebP image.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        progress.setVisibility(View.VISIBLE);
+        imageExecutor.execute(() -> {
+            try {
+                byte[] bytes;
+                try (InputStream input = getContentResolver().openInputStream(uri);
+                     ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                    if (input == null) throw new IOException("Selected image could not be opened.");
+                    byte[] buffer = new byte[8192];
+                    int total = 0;
+                    int read;
+                    while ((read = input.read(buffer)) != -1) {
+                        total += read;
+                        if (total > MAX_IMAGE_BYTES) {
+                            throw new IOException("The image must be 10 MB or smaller.");
+                        }
+                        output.write(buffer, 0, read);
+                    }
+                    bytes = output.toByteArray();
+                }
+                if (bytes.length == 0) throw new IOException("The selected image is empty.");
+
+                JSONObject body = new JSONObject();
+                String purpose = pendingImagePurpose == REQUEST_PROFILE_IMAGE ? "avatar" : "gallery";
+                body.put("modelId", modelId);
+                body.put("purpose", purpose);
+                body.put("contentType", contentType);
+                body.put("sizeBytes", bytes.length);
+
+                runOnUiThread(() -> api.post(
+                        "/api/v1/admin/media/upload-intent",
+                        body,
+                        new ApiClient.Callback() {
+                            @Override
+                            public void onSuccess(JSONObject intent) {
+                                String uploadUrl = intent.optString("uploadUrl", "");
+                                String assetId = intent.optString("assetId", "");
+                                if (uploadUrl.isEmpty() || assetId.isEmpty()) {
+                                    progress.setVisibility(View.GONE);
+                                    Toast.makeText(ModelManagementActivity.this,
+                                            "The upload could not be prepared.", Toast.LENGTH_LONG).show();
+                                    return;
+                                }
+                                uploadToR2(uploadUrl, assetId, contentType, bytes);
+                            }
+
+                            @Override
+                            public void onError(String message) {
+                                progress.setVisibility(View.GONE);
+                                Toast.makeText(ModelManagementActivity.this,
+                                        message, Toast.LENGTH_LONG).show();
+                            }
+                        }));
+            } catch (IOException | JSONException error) {
+                runOnUiThread(() -> {
+                    progress.setVisibility(View.GONE);
+                    Toast.makeText(ModelManagementActivity.this,
+                            error.getMessage() == null
+                                    ? "The selected image could not be uploaded."
+                                    : error.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void uploadToR2(String uploadUrl, String assetId, String contentType, byte[] bytes) {
+        imageExecutor.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(uploadUrl).openConnection();
+                connection.setRequestMethod("PUT");
+                connection.setDoOutput(true);
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(60000);
+                connection.setFixedLengthStreamingMode(bytes.length);
+                connection.setRequestProperty("Content-Type", contentType);
+                try (java.io.OutputStream output = connection.getOutputStream()) {
+                    output.write(bytes);
+                }
+                int status = connection.getResponseCode();
+                if (status < 200 || status >= 300) {
+                    throw new IOException("R2 upload returned HTTP " + status);
+                }
+
+                JSONObject completeBody = new JSONObject();
+                completeBody.put("assetId", assetId);
+                runOnUiThread(() -> api.post(
+                        "/api/v1/admin/media/" + assetId + "/complete",
+                        completeBody,
+                        callback(result -> {
+                            Toast.makeText(this, "Image uploaded.", Toast.LENGTH_LONG).show();
+                            loadModel();
+                        })));
+            } catch (IOException | JSONException error) {
+                runOnUiThread(() -> {
+                    progress.setVisibility(View.GONE);
+                    Toast.makeText(this,
+                            "Image upload failed: " + error.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                });
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        });
     }
 
     private void openPublicMedia(String mediaUrl) {
@@ -421,7 +595,7 @@ public class ModelManagementActivity extends AppCompatActivity {
                     int read;
                     while ((read = input.read(buffer)) != -1) {
                         total += read;
-                        if (total > MAX_AVATAR_BYTES) throw new IOException("Profile image is too large.");
+                        if (total > MAX_IMAGE_BYTES) throw new IOException("Profile image is too large.");
                         output.write(buffer, 0, read);
                     }
                     bytes = output.toByteArray();
